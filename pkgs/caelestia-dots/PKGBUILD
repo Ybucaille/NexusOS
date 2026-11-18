@@ -1,0 +1,41 @@
+# Caelestia dotfiles pinned to the revision validated on the owner's laptop.
+#
+# caelestia-dots ships the dots as a bare git repository whose main branch is
+# the pinned commit. nexusos-desktop deploys it with caelestia-cli's own engine
+# (git diff, conflicts, state), without the package and system upgrade steps of
+# `caelestia install` and `caelestia update`.
+# caelestia-firefox-theme is the dots' local package, built from the same tree.
+
+pkgbase=caelestia-dots
+pkgname=(caelestia-dots caelestia-firefox-theme)
+pkgver=r0.4a635c6
+pkgrel=1
+_commit=4a635c6bf44d6415f10c09718864147584e71caa
+arch=(any)
+url='https://github.com/caelestia-dots/caelestia'
+license=('GPL-3.0-only')
+makedepends=(git)
+source=("caelestia::git+$url.git#commit=$_commit")
+sha256sums=('SKIP')
+
+package_caelestia-dots() {
+  pkgdesc='Caelestia dotfiles, pinned revision for NexusOS'
+  local repo="$pkgdir/usr/share/caelestia-dots/caelestia.git"
+  git clone -q --bare --no-local "$srcdir/caelestia" "$repo"
+  # Keep only main at the pinned commit, and drop every newer object.
+  git -C "$repo" for-each-ref --format='%(refname)' | xargs -rn1 git -C "$repo" update-ref -d
+  git -C "$repo" update-ref refs/heads/main "$_commit"
+  git -C "$repo" symbolic-ref HEAD refs/heads/main
+  git -C "$repo" reflog expire --expire=now --all
+  git -C "$repo" gc -q --prune=now
+  echo "$_commit" > "$pkgdir/usr/share/caelestia-dots/REV"
+}
+
+package_caelestia-firefox-theme() {
+  pkgdesc='The native app component of the CaelestiaFox Firefox theme'
+  depends=(fish jq inotify-tools)
+  install=caelestia-firefox-theme.install
+  local app="$srcdir/caelestia/firefox/native_app"
+  install -Dm644 "$app/manifest.json" "$pkgdir/usr/lib/mozilla/native-messaging-hosts/caelestiafox.json"
+  install -Dm755 "$app/app.fish" "$pkgdir/usr/lib/caelestia/caelestiafox"
+}

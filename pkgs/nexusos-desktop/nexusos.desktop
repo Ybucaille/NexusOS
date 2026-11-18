@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=NexusOS
+Comment=Hyprland with the Caelestia shell
+Exec=/usr/bin/nexusos-session
+Type=Application

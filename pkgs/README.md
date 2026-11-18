@@ -18,7 +18,40 @@ The desktop set below was validated together on 2026-10-20 with Qt 6.12:
 | `libcava` | 1.0.0 | none |
 | `ttf-rubik-vf` | 2.3.0 | none |
 
+The dots and the packages their components need, validated at dots revision
+`4a635c6`:
+
+| Package | Version | Change from AUR |
+|---|---|---|
+| `caelestia-dots` | `4a635c6` | new: the dots as a pinned bare git repository |
+| `caelestia-firefox-theme` | `4a635c6` | built from the same pinned tree |
+| `qtengine` | 0.2.1 | Qt6 only (no qt5-base, no KF5); pinned below AUR (0.2.4) |
+| `darkly` | 0.5.39 | built from source instead of `darkly-bin`, provides it |
+| `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
+| `pwvucontrol` | 0.5.3 | none |
+| `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
+
 Newer upstream versions enter through the `testing` channel only.
+
+## Dots deployment
+
+`caelestia install` and `caelestia update` install packages through an AUR
+helper and upgrade the whole system. NexusOS keeps their engine and drops
+those steps: `/usr/lib/nexusos/dots` (shipped by `nexusos-desktop`) calls
+caelestia-cli's own deployer, changeset and state code against the pinned
+repository in `/usr/share/caelestia-dots`.
+
+- First login: `nexusos-session` (sh) deploys the dots before Hyprland starts,
+  skipping hooks that need a compositor.
+- New pinned revision: `nexusos-dots.path` sees `/usr/share/caelestia-dots/REV`
+  change and starts `nexusos-dots.service` inside the session, like
+  `caelestia update`.
+- Every other login costs one `grep` in sh; Python never starts.
+
+Login goes through greetd with tuigreet on the TTY, instead of a second
+compositor for the greeter.
+
+`ci/test-dots.sh` checks first install, fast path and update in a container.
 
 ## Qt coupling
 

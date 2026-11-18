@@ -1,0 +1,115 @@
+#!/usr/bin/python3
+"""Deploy the pinned Caelestia dots for the current user.
+
+Reuses caelestia-cli's own engine (git source, manifest, deployer, changeset,
+state) instead of reimplementing it, so `caelestia` keeps seeing a consistent
+installation. Unlike `caelestia install` and `caelestia update`, it never
+installs packages or upgrades the system: on NexusOS packages come from the
+distribution. Python only runs on a first login or a new pinned revision;
+nexusos-session and dots-pending decide that in sh.
+
+Usage: dots install   first deployment, before the compositor starts
+       dots update    apply a new pinned revision inside the session
+"""
+
+import os
+import sys
+from argparse import Namespace
+
+from caelestia.subcommands import install as cli_install
+from caelestia.subcommands import update as cli_update
+from caelestia.utils.dots.diff import Changeset
+from caelestia.utils.dots.misc import run_hooks
+from caelestia.utils.dots.source import DotsSource
+from caelestia.utils.dots.state import DotsState
+from caelestia.utils.io import disable_input, info
+
+URL = os.environ.get("NEXUSOS_DOTS_URL", "file:///usr/share/caelestia-dots/caelestia.git")
+# Optional components enabled on top of the manifest defaults.
+EXTRA_COMPONENTS = ["uwsm"]
+# Hooks that need a running compositor; the session starts the shell itself.
+SESSION_ONLY = ("hyprctl", "caelestia shell")
+
+
+def pinned_source() -> DotsSource:
+    source = DotsSource()
+    source.url = URL
+    source.branch = "main"
+    source.ensure()
+    return source
+
+
+def run_hooks_without_session(manifest, kind: str) -> None:
+    hooks = [h for h in manifest.enabled_hooks(kind) if not any(s in h for s in SESSION_ONLY)]
+    # run_hooks reads the list from the manifest; hand it a filtered view.
+    run_hooks(type("Hooks", (), {"enabled_hooks": lambda self, k: hooks})(), kind)
+
+
+def install() -> None:
+    source = pinned_source()
+    tip = source.checkout_tip()
+    manifest = source.manifest_at(tip)
+    manifest.resolve_components(enable=EXTRA_COMPONENTS)
+
+    run_hooks_without_session(manifest, "post_package")
+    deployed = cli_install.Command(Namespace(noconfirm=True)).deploy_configs(source, manifest)
+    run_hooks_without_session(manifest, "post_install")
+
+    DotsState(
+        applied_rev=tip,
+        enabled_components=manifest.enabled_components,
+        deployed_files=deployed,
+    ).save()
+
+
+def update() -> None:
+    state = DotsState.load()
+    if state.applied_rev is None:
+        install()
+        return
+
+    source = pinned_source()
+    tip = source.tip_rev()
+    if tip == state.applied_rev:
+        info("Dots already up to date.")
+        return
+
+    manifest = source.manifest_at(tip)
+    known = set(source.manifest_at(state.applied_rev).components) if source.has_rev(state.applied_rev) \
+        else set(manifest.components)
+    # Keep the user's components, and add new ones that are on by default.
+    enabled = [name for name, comp in manifest.components.items()
+               if name in state.enabled_components or (name not in known and comp.default)]
+    manifest.resolve_components(enable=enabled, disable=[n for n in manifest.components if n not in enabled])
+
+    changeset = Changeset.compute(source, state.applied_rev, tip, manifest.enabled_entries(), state.deployed_files)
+    source.checkout_tip()
+    command = cli_update.Command(Namespace(noconfirm=True))
+    new_files, revived_files, placed = command.deploy_changeset(source, changeset)
+
+    deployed = dict(state.deployed_files)
+    for dest in (*changeset.deletes, *changeset.stale, *changeset.untracked):
+        deployed.pop(str(dest), None)
+    for repofile, dest in changeset.remap:
+        deployed[str(dest)] = repofile
+    deployed.update(placed)
+
+    state.deployed_files = deployed
+    state.applied_rev = tip
+    state.enabled_components = manifest.enabled_components
+    state.save()
+
+    run_hooks(manifest, "post_update")
+    command.summarize(changeset, new_files, revived_files)
+
+
+def main() -> None:
+    disable_input()
+    commands = {"install": install, "update": update}
+    if len(sys.argv) != 2 or sys.argv[1] not in commands:
+        sys.exit(__doc__)
+    commands[sys.argv[1]]()
+
+
+if __name__ == "__main__":
+    main()

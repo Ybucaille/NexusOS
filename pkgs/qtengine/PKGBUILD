@@ -1,0 +1,35 @@
+# Based on the AUR qtengine recipe (maintainer: ThatOneCalculator).
+# Pinned to 0.2.1, the version validated with the Caelestia dots.
+# Qt6 only: dropping the Qt5 plugin removes qt5-base and the KF5 libraries
+# from the system; Qt5 applications are left unthemed.
+
+pkgname=qtengine
+pkgver=0.2.1
+pkgrel=1
+pkgdesc='Qt platform theme made easy (Qt6 only)'
+arch=(x86_64)
+url='https://github.com/kossLAN/qtengine'
+license=('BSD-2-Clause')
+depends=(kcolorscheme kconfig kiconthemes kconfigwidgets qt6-base)
+makedepends=(cmake ninja extra-cmake-modules)
+conflicts=(qtengine-bin qtengine-git)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/$pkgver.tar.gz"
+        config.example.json)
+sha256sums=('3dc1278952a5ba9520208b5819c92bb4966a335897b6c30099c9320c87b15221'
+            '5dfcc6479a03140e492eff69936c708d1bffba3edf9d5312b27b5efff61fa06e')
+
+build() {
+  cmake -S "$pkgname-$pkgver" -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DBUILD_QT5=OFF \
+    -DBUILD_QT6=ON \
+    -Wno-dev
+  cmake --build build
+}
+
+package() {
+  install -Dm644 config.example.json -t "$pkgdir/etc/$pkgname/"
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 "$pkgname-$pkgver/LICENSE" -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

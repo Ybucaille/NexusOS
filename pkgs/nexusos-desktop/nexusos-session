@@ -1,0 +1,6 @@
+#!/bin/sh
+# Session entry point started by greetd. Runs at every login, so it stays
+# POSIX sh: the dots engine (Python) only starts on a user's first login.
+state="${XDG_STATE_HOME:-$HOME/.local/state}/caelestia/dots-state.json"
+[ -f "$state" ] || /usr/lib/nexusos/dots install
+exec uwsm start -e -D Hyprland hyprland.desktop

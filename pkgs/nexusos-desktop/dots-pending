@@ -1,0 +1,8 @@
+#!/bin/sh
+# ExecCondition of nexusos-dots.service: succeed only when the pinned dots
+# revision differs from the applied one, so Python never starts otherwise.
+state="${XDG_STATE_HOME:-$HOME/.local/state}/caelestia/dots-state.json"
+pinned=$(cat /usr/share/caelestia-dots/REV 2>/dev/null) || exit 1
+[ -f "$state" ] || exit 1
+grep -q "\"applied_rev\": \"$pinned\"" "$state" && exit 1
+exit 0

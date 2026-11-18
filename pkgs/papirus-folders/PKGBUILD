@@ -1,0 +1,23 @@
+# Based on the AUR papirus-folders recipe (maintainer: Mark Wagie).
+# Release tarball instead of the signed git tag: the build container has no
+# keyring access; the tarball is pinned by checksum instead.
+
+pkgname=papirus-folders
+pkgver=1.14.0
+pkgrel=1
+pkgdesc='Allows changing the color of folders in Papirus icon theme and its forks'
+arch=(any)
+url='https://github.com/PapirusDevelopmentTeam/papirus-folders'
+license=('MIT')
+depends=(bash papirus-icon-theme)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+        "$pkgname.hook")
+sha256sums=('658723db46638ad988ef91ed7d28e9941b528418f7c83d51fe17cdf4985e6dd2'
+            'b6f52cab4c7a42e85b7e3cc0160bb9cf060aed20ab78ee2135a3f18dcaf6e92c')
+
+package() {
+  cd "$pkgname-$pkgver"
+  make ZSHCOMPDIR=/usr/share/zsh/site-functions DESTDIR="$pkgdir" install
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 "$srcdir/$pkgname.hook" -t "$pkgdir/usr/share/libalpm/hooks/"
+}

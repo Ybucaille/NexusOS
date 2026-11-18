@@ -13,7 +13,8 @@ snapshot=${1:-$(date -u -d yesterday +%Y/%m/%d)}
 shift || true
 
 # Dependencies first: later packages install earlier ones from the local repo.
-order=(ttf-rubik-vf libcava python-materialyoucolor qt6-m3shapes-git quickshell-git caelestia-cli caelestia-shell)
+order=(ttf-rubik-vf libcava python-materialyoucolor qt6-m3shapes-git quickshell-git caelestia-cli caelestia-shell
+       papirus-folders qtengine darkly pwvucontrol caelestia-dots nexusos-desktop)
 packages=("${@:-${order[@]}}")
 
 out="$root/out/repo/${snapshot//\//-}"

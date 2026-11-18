@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply the pinned Caelestia dots
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/lib/nexusos/dots-pending
+ExecStart=/usr/lib/nexusos/dots update
+
+[Install]
+WantedBy=graphical-session.target

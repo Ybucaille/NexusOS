@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for a new pinned Caelestia dots revision
+PartOf=graphical-session.target
+
+[Path]
+PathChanged=/usr/share/caelestia-dots/REV
+
+[Install]
+WantedBy=graphical-session.target

@@ -18,12 +18,19 @@ pacman -Syuu --noconfirm --needed base-devel git >/dev/null
 useradd -m builder
 echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
 
+# Packages that only copy files: their runtime dependencies are not needed to
+# build them, and nexusos-desktop's would pull the whole desktop in.
+nodeps=" caelestia-dots nexusos-desktop "
+
 for pkg in $PACKAGES; do
   echo "==> $pkg"
   cp -r "/pkgs/$pkg" "/home/builder/$pkg"
   chown -R builder: "/home/builder/$pkg"
-  (cd "/home/builder/$pkg" && sudo -u builder PKGDEST=/home/builder/out makepkg -s --noconfirm --noprogressbar)
-  for file in /home/builder/out/"$pkg"-*.pkg.tar.zst; do
+  deps=-s
+  [[ $nodeps == *" $pkg "* ]] && deps=-d
+  (cd "/home/builder/$pkg" && sudo -u builder PKGDEST=/home/builder/out makepkg "$deps" --noconfirm --noprogressbar)
+  # A split recipe produces several packages; publish all of them.
+  for file in /home/builder/out/*.pkg.tar.zst; do
     cp "$file" /repo/
     repo-add -q -R /repo/nexusos.db.tar.zst "/repo/$(basename "$file")"
   done

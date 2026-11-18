@@ -67,7 +67,11 @@ make the OS solid on their own) and specifies the interface.
 2. **Fluid means never broken.** The biggest threat to fluidity on Arch is an
    update that breaks the desktop. NexusOS stays rolling, but one tested step
    behind.
-3. **Distributable by design, private until decided.** No machine-specific
+3. **The cheapest language for each path.** Anything resident or run at every
+   boot or login is Rust, C or POSIX sh, with no interpreter startup. Python
+   and bash stay on cold paths (builds, benchmarks, rare updates), or reuse a
+   tested upstream library instead of rewriting it.
+4. **Distributable by design, private until decided.** No machine-specific
    hardcoding, no secret in the image. Publication happens only when the owner
    decides.
 
@@ -165,6 +169,5 @@ The capability interface follows when Nexus is ready.
 ## Open questions
 
 - Frame-time measurement method under Caelestia animations.
-- Whether the Caelestia CLI can apply dotfiles without its system upgrade.
 - iGPU versus dGPU for the desktop.
 - Package repository hosting and access while private.
