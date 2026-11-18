@@ -11,7 +11,8 @@ pkgdesc='Flexible toolkit for making desktop shells with QtQuick'
 arch=(x86_64)
 url='https://git.outfoxxed.me/quickshell/quickshell'
 license=('LGPL-3.0-only')
-options=(!strip)
+# Unstripped for Quickshell's crash reporter; !debug keeps debug sources out.
+options=(!strip !debug)
 depends=(qt6-declarative qt6-base jemalloc qt6-svg libpipewire libxcb wayland libdrm mesa cpptrace polkit)
 makedepends=(vulkan-headers spirv-tools qt6-shadertools wayland wayland-protocols cli11 ninja cmake git)
 provides=("$_pkgname")

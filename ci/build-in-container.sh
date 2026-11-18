@@ -30,3 +30,6 @@ for pkg in $PACKAGES; do
   rm -f /home/builder/out/*
   pacman -Sy --noconfirm >/dev/null
 done
+
+# Hand the repository back to the host user instead of root.
+chown -R "$OWNER" /repo
