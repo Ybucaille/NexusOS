@@ -23,7 +23,7 @@ The dots and the packages their components need, validated at dots revision
 
 | Package | Version | Change from AUR |
 |---|---|---|
-| `caelestia-dots` | `4a635c6` | new: the dots as a pinned bare git repository |
+| `caelestia-dots` | `4a635c6` | new: the dots as a pinned bare git repository; upstream `d4c24f8` picked (Hyprland 0.57) |
 | `caelestia-firefox-theme` | `4a635c6` | built from the same pinned tree |
 | `qtengine` | 0.2.1 | Qt6 only (no qt5-base, no KF5); pinned below AUR (0.2.4) |
 | `darkly` | 0.5.39 | built from source instead of `darkly-bin`, provides it |

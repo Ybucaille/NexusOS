@@ -51,7 +51,8 @@ is measured on hardware (see `bench/`).
   the dots deploy, before Hyprland provides a display. The portals answer once
   the session runs.
 - The 2026/11/17 snapshot brings Hyprland 0.57.2, while the dots were
-  validated with 0.56.2: Hyprland warns that `group.lock_active()` is
-  deprecated (now `group.lock()`). Hyprland is not pinned by NexusOS yet.
+  validated with 0.56.2. `caelestia-dots` 4a635c6-2 picks upstream `d4c24f8`
+  for the deprecated `group.lock_active()`; the ISO built before it still shows
+  the warning.
 - The shell shows the Arch logo, read from `os-release`: branding comes with
   `nexusos-base`.
