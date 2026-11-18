@@ -2,7 +2,7 @@
 # from ci/signing-key.sh; pkgver is the date they were last written.
 
 pkgname=nexusos-keyring
-pkgver=0
+pkgver=20261118
 pkgrel=1
 pkgdesc='NexusOS repository PGP keyring'
 arch=(any)
