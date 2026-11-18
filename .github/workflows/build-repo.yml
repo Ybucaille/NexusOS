@@ -5,7 +5,12 @@ name: build-repo
 on:
   push:
     branches: [main]
-    paths: ['pkgs/**', 'ci/**', '.github/workflows/build-repo.yml']
+    paths:
+      - 'pkgs/**'
+      - 'ci/build-repo.sh'
+      - 'ci/build-in-container.sh'
+      - 'ci/test-dots.sh'
+      - '.github/workflows/build-repo.yml'
   schedule:
     # Weekly, so a new Qt in the Arch snapshot is caught before it reaches stable.
     - cron: '17 3 * * 1'
@@ -74,7 +79,11 @@ jobs:
             [[ ! -L $link ]] || cp --remove-destination "$(readlink "$link")" "$link"
           done
           tag="repo-$DATE"
+          notes="pacman repository \`nexusos\` built against the Arch Linux Archive snapshot of $DATE, from commit $GITHUB_SHA."
+          # The tag goes on the branch head, not on the built commit: when the
+          # workflow file changed since, GitHub refuses the token a ref that
+          # would carry the older workflow.
           gh release view "$tag" >/dev/null 2>&1 ||
-            gh release create "$tag" --target "$GITHUB_SHA" --title "Package repository $DATE" \
-              --notes "pacman repository \`nexusos\` built against the Arch Linux Archive snapshot of $DATE."
+            gh release create "$tag" --title "Package repository $DATE" --notes "$notes"
+          gh release edit "$tag" --notes "$notes"
           gh release upload "$tag" --clobber *.pkg.tar.zst* nexusos.db* nexusos.files*

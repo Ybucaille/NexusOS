@@ -76,7 +76,7 @@ Archive snapshot, so the host is never modified. Results land in
 6 GiB, 6 CPUs).
 
 GitHub Actions (`.github/workflows/build-repo.yml`) runs the same two scripts
-on every push touching `pkgs/` or `ci/`, weekly, and on demand for a given
+on every push touching `pkgs/` or the repository build scripts, weekly, and on demand for a given
 date, then publishes the repository as the private release
 `repo-<YYYY-MM-DD>`: one asset per package plus `nexusos.db` and
 `nexusos.files`. A run for an existing date replaces its assets.
