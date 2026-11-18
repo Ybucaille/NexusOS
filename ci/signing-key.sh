@@ -64,7 +64,8 @@ ci_key() {
   [[ -n $sub ]] || { echo 'no valid signing subkey' >&2; exit 1; }
   read_passphrase 'Passphrase for the primary key'
   tmp=$(mktemp -d)
-  trap 'GNUPGHOME=$tmp gpgconf --kill all 2>/dev/null; rm -rf "$tmp"' EXIT
+  # Expanded now: the trap runs after this function's locals are gone.
+  trap "GNUPGHOME='$tmp' gpgconf --kill all 2>/dev/null; rm -rf '$tmp'" EXIT
   cp -a "$GNUPGHOME/." "$tmp"
   rm -f "$tmp"/S.*
   printf '%s' "$pass" > "$tmp/old"
