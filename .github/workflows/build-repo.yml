@@ -1,0 +1,75 @@
+# Build the nexusos package repository with the same scripts as a local build
+# and publish it as a release named after its Arch snapshot date.
+name: build-repo
+
+on:
+  push:
+    branches: [main]
+    paths: ['pkgs/**', 'ci/**', '.github/workflows/build-repo.yml']
+  schedule:
+    # Weekly, so a new Qt in the Arch snapshot is caught before it reaches stable.
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      snapshot:
+        description: 'Arch Linux Archive date (YYYY/MM/DD), empty for yesterday'
+        required: false
+
+permissions:
+  contents: write
+
+# Two runs for the same date would race on the release assets.
+concurrency:
+  group: build-repo
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the snapshot
+        id: snapshot
+        env:
+          INPUT: ${{ inputs.snapshot }}
+        run: |
+          snapshot=${INPUT:-$(date -u -d yesterday +%Y/%m/%d)}
+          [[ $snapshot =~ ^[0-9]{4}/[0-9]{2}/[0-9]{2}$ ]] || { echo "bad snapshot: $snapshot" >&2; exit 1; }
+          echo "snapshot=$snapshot" >> "$GITHUB_OUTPUT"
+          echo "date=${snapshot//\//-}" >> "$GITHUB_OUTPUT"
+
+      # The Qt build dependencies and the Quickshell tree need more room than
+      # the runner leaves free.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Build
+        env:
+          NEXUSOS_BUILD_MEMORY: 5g
+        run: NEXUSOS_BUILD_CPUS=$(nproc) ci/build-repo.sh '${{ steps.snapshot.outputs.snapshot }}'
+
+      - name: Test the dots deployment
+        run: ci/test-dots.sh '${{ steps.snapshot.outputs.snapshot }}'
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATE: ${{ steps.snapshot.outputs.date }}
+        run: |
+          cd "out/repo/$DATE"
+          # GitHub renames assets with other characters (an epoch's ':'), and
+          # pacman would then ask for a file that is not there.
+          bad=$(ls *.pkg.tar.zst | grep -v '^[A-Za-z0-9._-]*$' || true)
+          [[ -z $bad ]] || { echo "asset names GitHub would rewrite: $bad" >&2; exit 1; }
+          # pacman fetches nexusos.db; release assets cannot be symlinks.
+          cp --remove-destination nexusos.db.tar.zst nexusos.db
+          cp --remove-destination nexusos.files.tar.zst nexusos.files
+          tag="repo-$DATE"
+          gh release view "$tag" >/dev/null 2>&1 ||
+            gh release create "$tag" --target "$GITHUB_SHA" --title "Package repository $DATE" \
+              --notes "pacman repository \`nexusos\` built against the Arch Linux Archive snapshot of $DATE."
+          gh release upload "$tag" --clobber *.pkg.tar.zst nexusos.db nexusos.db.tar.zst nexusos.files nexusos.files.tar.zst

@@ -73,3 +73,9 @@ Archive snapshot, so the host is never modified. Results land in
 `out/repo/<snapshot>/` (not tracked) as a pacman repository named `nexusos`.
 `NEXUSOS_BUILD_MEMORY` and `NEXUSOS_BUILD_CPUS` cap the container (default
 6 GiB, 6 CPUs).
+
+GitHub Actions (`.github/workflows/build-repo.yml`) runs the same two scripts
+on every push touching `pkgs/` or `ci/`, weekly, and on demand for a given
+date, then publishes the repository as the private release
+`repo-<YYYY-MM-DD>`: one asset per package plus `nexusos.db` and
+`nexusos.files`. A run for an existing date replaces its assets.
