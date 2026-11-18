@@ -1,0 +1,10 @@
+#!/bin/sh
+# Live medium: a passwordless user that greetd logs straight into the NexusOS
+# session. Runs at every boot, the live system starting from scratch.
+set -e
+id nexus >/dev/null 2>&1 || useradd -m -u 1000 -G wheel -c 'NexusOS live' nexus
+passwd -d nexus >/dev/null
+{
+  cat /usr/share/nexusos/greetd.toml
+  printf '\n[initial_session]\ncommand = "/usr/bin/nexusos-session"\nuser = "nexus"\n'
+} > /etc/greetd/config.toml

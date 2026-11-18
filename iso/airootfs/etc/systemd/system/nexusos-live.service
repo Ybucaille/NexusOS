@@ -1,0 +1,10 @@
+[Unit]
+Description=NexusOS live user and autologin
+Before=display-manager.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nexusos-live
+
+[Install]
+WantedBy=multi-user.target

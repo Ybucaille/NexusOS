@@ -1,0 +1,5 @@
+# Added to the package list of archiso's releng profile.
+nexusos-keyring
+nexusos-desktop
+# Named so pacman picks it to provide jack; its default, jack2, conflicts with it.
+pipewire-jack
