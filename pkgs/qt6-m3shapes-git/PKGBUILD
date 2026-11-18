@@ -1,0 +1,29 @@
+# Based on the AUR qt6-m3shapes-git recipe (maintainer: Soramane).
+# Pinned to the commit validated with caelestia-shell 2.5.0. Links against Qt:
+# rebuild it on every qt6-base update.
+
+_pkgname=qt6-m3shapes
+pkgname=$_pkgname-git
+pkgver=r41.32ad9ce
+pkgrel=1
+_commit=32ad9ce328bb77ed349b40a3be10ee9ea610b8ab
+pkgdesc='A Qt6 library for Material 3 Expressive shapes'
+arch=(x86_64)
+url='https://github.com/soramanew/m3shapes'
+license=('Apache-2.0')
+depends=(qt6-base qt6-declarative)
+makedepends=(git cmake ninja qt6-shadertools)
+provides=("$_pkgname")
+conflicts=("$_pkgname" 'caelestia-shell<2.4.0')
+source=("$_pkgname::git+$url.git#commit=$_commit")
+sha256sums=('SKIP')
+
+build() {
+  cmake -S "$_pkgname" -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 "$_pkgname/LICENSE" "$pkgdir/usr/share/licenses/$_pkgname/LICENSE"
+}

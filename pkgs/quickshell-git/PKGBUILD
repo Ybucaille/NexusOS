@@ -1,0 +1,46 @@
+# Based on the AUR quickshell-git recipe (maintainer: Entailz).
+# Pinned to 2d3b3e9 plus upstream 5d5d498, which makes it build against Qt 6.12.
+# Quickshell uses private Qt APIs: rebuild it on every qt6-base update.
+
+_pkgname=quickshell
+pkgname=$_pkgname-git
+pkgver=0.3.1.r10.g2d3b3e9
+pkgrel=1
+_commit=2d3b3e9c70ef380dff751b61d334dc88df016c29
+pkgdesc='Flexible toolkit for making desktop shells with QtQuick'
+arch=(x86_64)
+url='https://git.outfoxxed.me/quickshell/quickshell'
+license=('LGPL-3.0-only')
+options=(!strip)
+depends=(qt6-declarative qt6-base jemalloc qt6-svg libpipewire libxcb wayland libdrm mesa cpptrace polkit)
+makedepends=(vulkan-headers spirv-tools qt6-shadertools wayland wayland-protocols cli11 ninja cmake git)
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+$url.git#commit=$_commit"
+        qt612-upstream-compatibility.patch
+        quickshell-check.hook)
+sha256sums=('SKIP'
+            'b8a7eab0f883070a26283140e06d252a0aa3483287c54bbb0c3aacb6e82eb0b2'
+            '8543e21aeaaa5441b73a679160e7601a957f16c433e8d6bd9257e80bd0e94083')
+
+prepare() {
+  cd "$_pkgname"
+  git apply --exclude=changelog/next.md "$srcdir/qt612-upstream-compatibility.patch"
+}
+
+build() {
+  cmake -S "$_pkgname" -B build -GNinja \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DINSTALL_QML_PREFIX=lib/qt6/qml \
+    -DDISTRIBUTOR="NexusOS (package: quickshell-git)" \
+    -DGIT_REVISION=$_commit \
+    -DVENDOR_CPPTRACE=OFF
+  cmake --build build
+}
+
+package() {
+  install -Dm644 quickshell-check.hook -t "$pkgdir/usr/share/libalpm/hooks"
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 "$_pkgname/LICENSE" -t "$pkgdir/usr/share/licenses/$_pkgname"
+}

@@ -1,0 +1,10 @@
+--- a/services/Nmcli.qml
++++ b/services/Nmcli.qml
+@@ -199,6 +199,7 @@
+             if (index >= 0) {
+                 activeProcesses.splice(index, 1);
+             }
++            proc.destroy();
+         });
+ 
+         Qt.callLater(() => {

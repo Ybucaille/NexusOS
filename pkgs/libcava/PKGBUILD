@@ -1,0 +1,24 @@
+# Based on the AUR libcava recipe (maintainer: Joerg Weislogel).
+
+pkgname=libcava
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Cava as a shared library (fork by LukashonakV)'
+arch=(x86_64)
+url='https://github.com/LukashonakV/cava'
+license=('MIT')
+depends=(fftw ncurses alsa-lib iniparser libglvnd sdl2 portaudio sndio libpulse libpipewire)
+makedepends=(cmake meson autoconf-archive)
+options=(!lto)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/$pkgver.tar.gz")
+sha256sums=('437df0a29e52e555357a06238f4c5cbe6d51b5dd4225700cb7adbb19d8bb9474')
+
+build() {
+  meson setup -Dcava_font=false --prefix=/usr "cava-$pkgver" build
+  meson compile -C build
+}
+
+package() {
+  DESTDIR="$pkgdir" meson install -C build
+  install -Dm644 "cava-$pkgver/LICENSE" -t "$pkgdir/usr/share/licenses/$pkgname/"
+}
