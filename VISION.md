@@ -59,8 +59,11 @@ make the OS solid on their own) and specifies the interface.
 
 ## Principles
 
-1. **Measured, not assumed.** The user's current Arch + Caelestia install is
-   the baseline (`bench/`). Every tuning must beat it or is dropped.
+1. **Measured, not assumed.** Every tuning must beat a reference or is
+   dropped. The reference is not the owner's daily install, which keeps
+   changing, but a **vanilla profile**: plain Arch + Caelestia built by our
+   own installer from the same dated package snapshot, with every NexusOS
+   tuning off. Both are measured on the same hardware (`bench/`).
 2. **Fluid means never broken.** The biggest threat to fluidity on Arch is an
    update that breaks the desktop. NexusOS stays rolling, but one tested step
    behind.

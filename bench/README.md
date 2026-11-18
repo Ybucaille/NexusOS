@@ -1,7 +1,23 @@
 # Benchmarks
 
-Every NexusOS tuning must beat the baseline of the owner's current Arch +
-Caelestia install, measured with the same script on the same hardware.
+Every NexusOS tuning must beat a reference, measured with the same script on
+the same hardware.
+
+## Which reference
+
+The owner's daily install keeps changing (packages, services, autostarts), so
+it cannot stay the reference. Comparisons run between two installs built from
+the **same dated package snapshot**:
+
+- **vanilla:** plain Arch + Caelestia from our installer, every tuning off;
+- **nexusos:** the same, with the tunings under test.
+
+Only the tuning differs, so the gap is its effect. Each new snapshot gets a new
+vanilla run; results are never compared across snapshots.
+
+The runs of the daily install (`results/*-baseline.json`) record the
+starting point: what NexusOS was built to improve on. They are history, not
+the comparison target.
 
 ## Clean-run protocol
 
