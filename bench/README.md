@@ -17,14 +17,15 @@ run follows this protocol:
    bench/baseline.py --label baseline --llm qwen2.5:7b-instruct
    ```
 
-The script reports `clean run: yes` only when user applications use less than
-100 MiB. A run that is not clean stays useful for the desktop footprint, but is
-not a reference.
+The script reports `clean run: yes` only after two minutes of uptime and when
+user applications use less than 100 MiB. A run that is not clean stays useful
+for the desktop footprint, but is not a reference.
 
 ## What is measured
 
 - **Boot:** firmware, loader, kernel and userspace stages, time to
-  `graphical.target`, the ten slowest units.
+  `graphical.target`, the critical chain that delayed it, the ten slowest
+  units.
 - **Memory:** total, available, swap and zram usage, swappiness, THP.
 - **Pressure:** PSI for CPU, memory and I/O.
 - **Processes**, in four groups: `system` (anonymous memory of

@@ -62,11 +62,18 @@ def boot():
         parts = line.split(None, 1)
         if len(parts) == 2:
             blame.append({"time": parts[0], "unit": parts[1]})
+    # Units that actually delayed the graphical target, unlike blame which lists parallel work.
+    chain = []
+    for line in run(["systemd-analyze", "critical-chain", "graphical.target", "--no-pager"]).splitlines():
+        match = re.search(r"([\w@.\\-]+) @([\d.]+m?s)(?: \+([\d.]+m?s))?", line)
+        if match:
+            chain.append({"unit": match.group(1), "at": match.group(2), "took": match.group(3)})
     return {
         "stages_s": stages,
         "total_s": float(total.group(1)) if total else None,
         "graphical_target_s": float(target.group(1)) if target else None,
         "blame_top10": blame,
+        "critical_chain": chain,
     }
 
 
@@ -283,13 +290,14 @@ def main():
     args = parser.parse_args()
 
     procs = processes()
-    # A clean run has no user application open besides the launching terminal.
-    clean = procs["pss_mib"]["apps"] < 100
+    uptime = float((read("/proc/uptime") or "0").split()[0])
+    # A clean run has settled after boot and no user application open besides the terminal.
+    clean = procs["pss_mib"]["apps"] < 100 and uptime >= 120
     result = {
         "label": args.label,
         "date": datetime.now().astimezone().isoformat(timespec="seconds"),
         "clean": clean,
-        "uptime_s": float((read("/proc/uptime") or "0").split()[0]),
+        "uptime_s": uptime,
         "kernel": platform.release(),
         "cmdline": read("/proc/cmdline"),
         "cpu_power": cpu_power(),
@@ -310,7 +318,12 @@ def main():
 
     b, p = result["boot"], procs["pss_mib"]
     print(f"{out}")
-    print(f"clean run: {'yes' if clean else 'NO, apps use ' + str(p['apps']) + ' MiB'}")
+    reasons = []
+    if p["apps"] >= 100:
+        reasons.append(f"apps use {p['apps']} MiB")
+    if uptime < 120:
+        reasons.append(f"uptime {uptime:.0f} s < 120 s")
+    print(f"clean run: {'yes' if clean else 'NO, ' + ', '.join(reasons)}")
     print(f"boot: {b['total_s']} s total, graphical.target after {b['graphical_target_s']} s")
     print(f"desktop footprint: {procs['desktop_footprint_mib']} MiB "
           f"(system {p['system']}, desktop core {p['desktop_core']}, "
