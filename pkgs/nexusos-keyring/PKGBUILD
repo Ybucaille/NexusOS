@@ -1,0 +1,18 @@
+# NexusOS repository keyring, on the model of archlinux-keyring. The files come
+# from ci/signing-key.sh; pkgver is the date they were last written.
+
+pkgname=nexusos-keyring
+pkgver=0
+pkgrel=1
+pkgdesc='NexusOS repository PGP keyring'
+arch=(any)
+url='https://github.com/Ybucaille/NexusOS'
+license=('GPL-3.0-only')
+depends=(pacman)
+install=nexusos-keyring.install
+source=(nexusos.gpg nexusos-trusted nexusos-revoked)
+sha256sums=(SKIP SKIP SKIP)
+
+package() {
+  install -Dm644 nexusos.gpg nexusos-trusted nexusos-revoked -t "$pkgdir/usr/share/pacman/keyrings"
+}

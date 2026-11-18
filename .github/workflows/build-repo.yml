@@ -50,7 +50,10 @@ jobs:
       - name: Build
         env:
           NEXUSOS_BUILD_MEMORY: 5g
-        run: NEXUSOS_BUILD_CPUS=$(nproc) ci/build-repo.sh '${{ steps.snapshot.outputs.snapshot }}'
+          NEXUSOS_SIGNING_KEY: ${{ secrets.NEXUSOS_SIGNING_KEY }}
+        run: |
+          [[ -n $NEXUSOS_SIGNING_KEY ]] || echo '::warning::NEXUSOS_SIGNING_KEY is not set, the repository is unsigned'
+          NEXUSOS_BUILD_CPUS=$(nproc) ci/build-repo.sh '${{ steps.snapshot.outputs.snapshot }}'
 
       - name: Test the dots deployment
         run: ci/test-dots.sh '${{ steps.snapshot.outputs.snapshot }}'
@@ -65,11 +68,13 @@ jobs:
           # pacman would then ask for a file that is not there.
           bad=$(ls *.pkg.tar.zst | grep -v '^[A-Za-z0-9._-]*$' || true)
           [[ -z $bad ]] || { echo "asset names GitHub would rewrite: $bad" >&2; exit 1; }
+          rm -f ./*.old ./*.old.sig
           # pacman fetches nexusos.db; release assets cannot be symlinks.
-          cp --remove-destination nexusos.db.tar.zst nexusos.db
-          cp --remove-destination nexusos.files.tar.zst nexusos.files
+          for link in nexusos.db nexusos.files nexusos.db.sig nexusos.files.sig; do
+            [[ ! -L $link ]] || cp --remove-destination "$(readlink "$link")" "$link"
+          done
           tag="repo-$DATE"
           gh release view "$tag" >/dev/null 2>&1 ||
             gh release create "$tag" --target "$GITHUB_SHA" --title "Package repository $DATE" \
               --notes "pacman repository \`nexusos\` built against the Arch Linux Archive snapshot of $DATE."
-          gh release upload "$tag" --clobber *.pkg.tar.zst nexusos.db nexusos.db.tar.zst nexusos.files nexusos.files.tar.zst
+          gh release upload "$tag" --clobber *.pkg.tar.zst* nexusos.db* nexusos.files*

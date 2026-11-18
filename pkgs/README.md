@@ -30,6 +30,7 @@ The dots and the packages their components need, validated at dots revision
 | `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
 | `pwvucontrol` | 0.5.3 | none |
 | `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
+| `nexusos-keyring` | key date | NexusOS: repository signing key (see Signing) |
 
 Newer upstream versions enter through the `testing` channel only.
 
@@ -79,3 +80,26 @@ on every push touching `pkgs/` or `ci/`, weekly, and on demand for a given
 date, then publishes the repository as the private release
 `repo-<YYYY-MM-DD>`: one asset per package plus `nexusos.db` and
 `nexusos.files`. A run for an existing date replaces its assets.
+
+## Signing
+
+Packages and the database are signed with an ed25519 subkey of the
+`NexusOS Package Signing` key. Machines trust the primary key through
+`nexusos-keyring`, so a subkey can be replaced without touching them.
+
+- The primary key only certifies and stays with the owner, in
+  `~/.config/nexusos/gnupg`, with an offline backup and its revocation
+  certificate.
+- The signing subkey expires after a year. CI holds a copy without passphrase
+  in the `NEXUSOS_SIGNING_KEY` secret; the build imports it as root, so
+  upstream build code, which runs as `builder`, cannot read it.
+
+```bash
+ci/signing-key.sh init                                         # once
+ci/signing-key.sh ci-key | gh secret set NEXUSOS_SIGNING_KEY   # after init and renew
+ci/signing-key.sh renew                                        # yearly, then commit the keyring
+NEXUSOS_SIGNING_KEY=$(ci/signing-key.sh ci-key) ci/build-repo.sh   # signed local build
+```
+
+Without the key the build is unsigned. `ci/test-dots.sh` requires signatures,
+checked through the keyring package, whenever the database is signed.

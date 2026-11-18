@@ -2,17 +2,35 @@
 # Runs inside the archlinux container started by build-repo.sh.
 set -euo pipefail
 
+# Hand the repository back to the host user instead of root, even on failure.
+trap 'chown -R "$OWNER" /repo' EXIT
+
 # Pin every Arch repository to the snapshot date; -Syuu also downgrades
 # whatever the image ships that is newer than the snapshot.
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 cat >> /etc/pacman.conf <<'EOF'
 
+# The container trusts what it builds itself; a signed database would otherwise
+# need the key in pacman's keyring.
 [nexusos]
-SigLevel = Optional TrustAll
+SigLevel = Never
 Server = file:///repo
 EOF
 [[ -f /repo/nexusos.db.tar.zst ]] || repo-add -q /repo/nexusos.db.tar.zst
 pacman -Syuu --noconfirm --needed base-devel git >/dev/null
+
+# The signing subkey stays with root: upstream build code runs as builder and
+# never sees it.
+sign=()
+if [[ -n ${NEXUSOS_SIGNING_KEY:-} ]]; then
+  export GNUPGHOME=/root/signing
+  mkdir -m 700 "$GNUPGHOME"
+  gpg --batch --quiet --import <<<"$NEXUSOS_SIGNING_KEY"
+  unset NEXUSOS_SIGNING_KEY
+  key=$(gpg -K --with-colons | awk -F: '/^ssb/{s = ($12 ~ /s/)} /^fpr/ && s {k = $10; s = 0} END {print k}')
+  sign=(-s -k "$key")
+  echo "signing with subkey $key"
+fi
 
 # makepkg refuses to run as root.
 useradd -m builder
@@ -32,11 +50,11 @@ for pkg in $PACKAGES; do
   # A split recipe produces several packages; publish all of them.
   for file in /home/builder/out/*.pkg.tar.zst; do
     cp "$file" /repo/
-    repo-add -q -R /repo/nexusos.db.tar.zst "/repo/$(basename "$file")"
+    file="/repo/$(basename "$file")"
+    # repo-add records the package signature, so it must exist first.
+    [[ -z ${key:-} ]] || gpg --batch --yes --detach-sign -u "$key!" "$file"
+    repo-add -q -R "${sign[@]}" /repo/nexusos.db.tar.zst "$file"
   done
   rm -f /home/builder/out/*
   pacman -Sy --noconfirm >/dev/null
 done
-
-# Hand the repository back to the host user instead of root.
-chown -R "$OWNER" /repo

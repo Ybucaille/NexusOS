@@ -13,6 +13,15 @@ repo="$root/out/repo/${snapshot//\//-}"
 docker run --rm -e SNAPSHOT="$snapshot" -v "$repo:/repo:ro" archlinux:latest bash -euo pipefail -c '
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 printf "\n[nexusos]\nSigLevel = Optional TrustAll\nServer = file:///repo\n" >> /etc/pacman.conf
+# A signed repository must verify through its own keyring package.
+if [[ -f /repo/nexusos.db.sig ]]; then
+  pacman-key --init >/dev/null 2>&1
+  # Bootstrap: the keyring cannot be checked before it is installed.
+  cp /repo/nexusos-keyring-*.pkg.tar.zst /tmp/
+  pacman -U --noconfirm /tmp/nexusos-keyring-*.pkg.tar.zst >/dev/null
+  sed -i "s/^SigLevel = Optional TrustAll$/SigLevel = Required/" /etc/pacman.conf
+  echo "== signatures required"
+fi
 pacman -Syuu --noconfirm >/dev/null
 # The engine needs the CLI and git; the desktop packages themselves are not needed.
 pacman -S --noconfirm --needed caelestia-cli caelestia-dots git xdg-user-dirs >/dev/null
