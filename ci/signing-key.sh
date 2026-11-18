@@ -7,10 +7,10 @@
 # on the terminal; no pinentry window is ever opened.
 #
 # Usage:
-#   ci/signing-key.sh init     create the key, write pkgs/nexusos-keyring files
-#   ci/signing-key.sh ci-key   print the signing subkey, without passphrase,
-#                              for: ci/signing-key.sh ci-key | gh secret set NEXUSOS_SIGNING_KEY
-#   ci/signing-key.sh renew    extend the signing subkey by a year, refresh the keyring
+#   ci/signing-key.sh init       create the key, write pkgs/nexusos-keyring files
+#   ci/signing-key.sh ci-secret  store the signing subkey in the CI secret
+#   ci/signing-key.sh ci-key     print the signing subkey, without passphrase
+#   ci/signing-key.sh renew      extend the signing subkey by a year, refresh the keyring
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -55,6 +55,28 @@ write_keyring() {
   echo "keyring written to $keyring (commit it)"
 }
 
+# The signing subkey without passphrase. gpg exports secret keys under their
+# own passphrase: clear it in a throwaway copy of the keyring, export from
+# there, then wipe the copy.
+ci_key() {
+  local sub tmp grip reply
+  sub=$(signing_subkey)
+  [[ -n $sub ]] || { echo 'no valid signing subkey' >&2; exit 1; }
+  read_passphrase 'Passphrase for the primary key'
+  tmp=$(mktemp -d)
+  trap 'GNUPGHOME=$tmp gpgconf --kill all 2>/dev/null; rm -rf "$tmp"' EXIT
+  cp -a "$GNUPGHOME/." "$tmp"
+  rm -f "$tmp"/S.*
+  printf '%s' "$pass" > "$tmp/old"
+  : > "$tmp/new"
+  for grip in $(GNUPGHOME=$tmp gpg -K --with-colons --with-keygrip "$uid" | awk -F: '/^grp/{print $10}'); do
+    reply=$(GNUPGHOME=$tmp gpg-connect-agent 'OPTION pinentry-mode=loopback' "/definqfile PASSPHRASE $tmp/old" \
+      "/definqfile NEW_PASSPHRASE $tmp/new" "PASSWD $grip" /bye)
+    [[ $reply != *ERR* ]] || { echo 'wrong passphrase' >&2; exit 1; }
+  done
+  GNUPGHOME=$tmp gpg --batch --passphrase '' --armor --export-secret-subkeys "$sub!"
+}
+
 case ${1:-} in
   init)
     [[ -z $(gpg --list-keys --with-colons "$uid" 2>/dev/null) ]] || { echo "a key already exists in $GNUPGHOME" >&2; exit 1; }
@@ -72,27 +94,19 @@ Copy these two files to offline storage (USB key), then delete the first:
   $backup
   $GNUPGHOME/openpgp-revocs.d/$fpr.rev
 Then give CI the signing subkey:
-  ci/signing-key.sh ci-key | gh secret set NEXUSOS_SIGNING_KEY
+  ci/signing-key.sh ci-secret
 EOF
     ;;
+  ci-secret)
+    # Not a pipe into gh: a passphrase typed while gh runs was rejected (gh
+    # may talk to the terminal meanwhile), and a failed export then
+    # overwrote the secret with nothing.
+    key=$(ci_key)
+    [[ $key == *'BEGIN PGP PRIVATE KEY BLOCK'* ]] || { echo 'no key exported' >&2; exit 1; }
+    gh secret set NEXUSOS_SIGNING_KEY <<<"$key"
+    ;;
   ci-key)
-    sub=$(signing_subkey)
-    [[ -n $sub ]] || { echo 'no valid signing subkey' >&2; exit 1; }
-    read_passphrase 'Passphrase for the primary key'
-    # gpg exports secret keys under their own passphrase: clear it in a
-    # throwaway copy of the keyring, export from there, then wipe the copy.
-    tmp=$(mktemp -d)
-    trap 'GNUPGHOME=$tmp gpgconf --kill all 2>/dev/null; rm -rf "$tmp"' EXIT
-    cp -a "$GNUPGHOME/." "$tmp"
-    rm -f "$tmp"/S.*
-    printf '%s' "$pass" > "$tmp/old"
-    : > "$tmp/new"
-    for grip in $(GNUPGHOME=$tmp gpg -K --with-colons --with-keygrip "$uid" | awk -F: '/^grp/{print $10}'); do
-      reply=$(GNUPGHOME=$tmp gpg-connect-agent 'OPTION pinentry-mode=loopback' "/definqfile PASSPHRASE $tmp/old" \
-        "/definqfile NEW_PASSPHRASE $tmp/new" "PASSWD $grip" /bye)
-      [[ $reply != *ERR* ]] || { echo 'wrong passphrase' >&2; exit 1; }
-    done
-    GNUPGHOME=$tmp gpg --batch --passphrase '' --armor --export-secret-subkeys "$sub!"
+    ci_key
     ;;
   renew)
     fpr=$(primary) sub=$(signing_subkey)
@@ -100,7 +114,7 @@ EOF
     read_passphrase 'Passphrase for the primary key'
     with_pass --quick-set-expire "$fpr" 1y "$sub"
     write_keyring
-    echo 'CI still holds the old expiry: ci/signing-key.sh ci-key | gh secret set NEXUSOS_SIGNING_KEY'
+    echo 'CI still holds the old expiry: ci/signing-key.sh ci-secret'
     ;;
   *)
     sed -n '2,/^set -euo/{/^#/s/^# \{0,1\}//p}' "$0"

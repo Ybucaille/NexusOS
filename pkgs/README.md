@@ -96,7 +96,7 @@ Packages and the database are signed with an ed25519 subkey of the
 
 ```bash
 ci/signing-key.sh init                                         # once
-ci/signing-key.sh ci-key | gh secret set NEXUSOS_SIGNING_KEY   # after init and renew
+ci/signing-key.sh ci-secret                                    # after init and renew
 ci/signing-key.sh renew                                        # yearly, then commit the keyring
 NEXUSOS_SIGNING_KEY=$(ci/signing-key.sh ci-key) ci/build-repo.sh   # signed local build
 ```
