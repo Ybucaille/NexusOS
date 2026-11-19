@@ -2,9 +2,11 @@
 # Move this system to the newest NexusOS release: the nexusos repository and
 # the Arch Linux Archive snapshot it was tested with, always together.
 #
-# The release is checked against the NexusOS key alone (not every key pacman
-# trusts), its database against the signed release file, and no release older
-# than the installed one is taken. The new repository is staged next to the
+# The source is a channel (/etc/nexusos/update.conf): stable by default,
+# testing for every build. The release is checked against the NexusOS key
+# alone (not every key pacman trusts), its database against the signed release
+# file, and no release older than the installed one is taken: after a move
+# from testing back to stable, nothing happens until stable catches up. The new repository is staged next to the
 # current one, a snapper snapshot is taken when snapper manages /, then the
 # mirrorlist and /var/lib/nexusos/repo switch and pacman upgrades. If pacman
 # fails, both go back as they were.
@@ -73,7 +75,9 @@ current_database=$(sha256sum < "$repo/nexusos.db" | cut -d' ' -f1)
 [[ -n $current ]] || die "cannot tell the installed snapshot from $mirrorlist"
 
 if [[ $snapshot < $current ]]; then
-  die "the source offers $snapshot, older than the installed $current"
+  [[ ! -f $pending ]] || die "the update to $(cat "$pending") did not finish, and the source now offers the older $snapshot"
+  echo "NexusOS is on snapshot $current, newer than the $snapshot of $source: nothing to update."
+  exit $(( check ? 2 : 0 ))
 fi
 if [[ -f $pending ]]; then
   echo "The update to $(cat "$pending") did not finish; resuming."

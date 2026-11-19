@@ -29,7 +29,7 @@ The dots and the packages their components need, validated at dots revision
 | `darkly` | 0.5.39 | built from source instead of `darkly-bin`, provides it |
 | `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
 | `pwvucontrol` | 0.5.3 | none |
-| `nexusos-base` | 0.2.0 | NexusOS: identity (os-release, logo), `nexusos-update` |
+| `nexusos-base` | 0.3.0 | NexusOS: identity (os-release, logo), `nexusos-update` |
 | `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
 | `nexusos-keyring` | key date | NexusOS: repository signing key (see Signing) |
 
@@ -75,8 +75,8 @@ Archive snapshot it was built and tested against. `nexusos-update` (shipped by
 1. downloads `nexusos-release` from the source in `/etc/nexusos/update.conf`
    and checks its signature against the NexusOS key alone, not every key
    pacman trusts;
-2. refuses a snapshot older than the installed one, and stops if nothing
-   changed;
+2. takes no snapshot older than the installed one (nothing to update), and
+   stops if nothing changed;
 3. downloads the database, checks it against the release file, then every
    package it lists that the current repository lacks (checksum and
    signature), staging the new repository next to the current one;
@@ -91,9 +91,29 @@ An update interrupted after the switch is resumed by the next run
 a newer release exists.
 
 The CI writes `nexusos-release` next to the database (`snapshot=` and the
-database's `sha256`) and signs it; `ci/fetch-repo.sh` checks it too. The
-default source is the GitHub release marked latest, which machines can reach
-only once the releases are public.
+database's `sha256`) and signs it; `ci/fetch-repo.sh` checks it too.
+
+## Channels
+
+The source in `/etc/nexusos/update.conf` is a channel, a GitHub release that
+always holds one complete repository:
+
+- `stable` (the default, the release the repository page shows): a dated
+  release promoted after testing, by `ci/promote.sh [YYYY/MM/DD]` (defaults to
+  what testing carries). Test the candidate first:
+  `UPDATE=<date> ci/test-install.sh` moves an installed system to it.
+- `testing`: every build that passes CI, as soon as it is published.
+
+`ci/publish-release.sh` fills both, and the dated releases. Packages go up
+first, then the databases, then `nexusos-release`: a machine that updates
+during the upload meets a mismatch (release file, database, package) and
+stops before changing anything. Assets the new database no longer lists leave
+last, assets GitHub already holds with the same `sha256` are not sent again,
+and a channel never moves back to an older snapshot. Moving a machine from
+testing back to stable leaves it where it is until stable catches up.
+
+Promotion is manual for now: the weekly promotion VISION.md describes waits
+for a boot test in CI.
 
 ## Qt coupling
 
@@ -117,10 +137,11 @@ Archive snapshot, so the host is never modified. Results land in
 6 GiB, 6 CPUs).
 
 GitHub Actions (`.github/workflows/build-repo.yml`) runs the same two scripts
-on every push touching `pkgs/` or the repository build scripts, weekly, and on demand for a given
-date, then publishes the repository as the private release
-`repo-<YYYY-MM-DD>`: one asset per package plus `nexusos.db` and
-`nexusos.files`. A run for an existing date replaces its assets.
+on every push touching `pkgs/` or the repository build scripts, weekly, and
+on demand for a given date, then publishes the repository as the release
+`repo-<YYYY-MM-DD>` and in the `testing` channel: one asset per package plus
+`nexusos.db`, `nexusos.files` and `nexusos-release`, each with its signature.
+A run for an existing date replaces its assets.
 
 ## Signing
 
