@@ -13,12 +13,16 @@ repo="$root/out/repo/${snapshot//\//-}"
 docker run --rm -e SNAPSHOT="$snapshot" -v "$repo:/repo:ro" archlinux:latest bash -euo pipefail -c '
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 printf "\n[nexusos]\nSigLevel = Optional TrustAll\nServer = file:///repo\n" >> /etc/pacman.conf
-# A signed repository must verify through its own keyring package.
-if [[ -f /repo/nexusos.db.sig ]]; then
+# Signatures verify through the keyring package of the repository. Signed
+# packages can sit in an unsigned database (local builds added to a fetched
+# release), so the keyring goes in whenever there is one.
+if compgen -G "/repo/nexusos-keyring-*.pkg.tar.zst" >/dev/null; then
   pacman-key --init >/dev/null 2>&1
   # Bootstrap: the keyring cannot be checked before it is installed.
   cp /repo/nexusos-keyring-*.pkg.tar.zst /tmp/
   pacman -U --noconfirm /tmp/nexusos-keyring-*.pkg.tar.zst >/dev/null
+fi
+if [[ -f /repo/nexusos.db.sig ]]; then
   sed -i "s/^SigLevel = Optional TrustAll$/SigLevel = Required/" /etc/pacman.conf
   echo "== signatures required"
 fi

@@ -32,6 +32,10 @@ if [[ -n ${NEXUSOS_SIGNING_KEY:-} ]]; then
   echo "signing with subkey $key"
 fi
 
+# Unsigned additions to a signed repository (a fetched release) would leave
+# the old database signatures behind, and pacman would reject the database.
+[[ -n ${key:-} ]] || rm -f /repo/nexusos.db*.sig /repo/nexusos.files*.sig
+
 # makepkg refuses to run as root.
 useradd -m builder
 echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder

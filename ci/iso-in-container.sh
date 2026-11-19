@@ -7,17 +7,19 @@ trap 'chown -R "$OWNER" /out /var/cache/pacman/pkg' EXIT
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 pacman -Syuu --noconfirm --needed archiso >/dev/null
 
-# A signed repository is checked through its own keyring, as on a machine.
+# Signatures are checked through the repository's own keyring, as on a
+# machine. Signed packages can sit in an unsigned database (local builds added
+# to a fetched release), so the keyring goes in whenever there is one.
 siglevel='Optional TrustAll'
-if [[ -f /repo/nexusos.db.sig ]]; then
+if compgen -G "/repo/nexusos-keyring-*.pkg.tar.zst" >/dev/null; then
   # The image ships no local secret key, and --populate needs one to certify
   # the NexusOS key.
   pacman-key --init >/dev/null 2>&1
   # Bootstrap: the keyring cannot be checked before it is installed.
   cp /repo/nexusos-keyring-*.pkg.tar.zst /tmp/
   pacman -U --noconfirm /tmp/nexusos-keyring-*.pkg.tar.zst >/dev/null
-  siglevel=Required
 fi
+[[ ! -f /repo/nexusos.db.sig ]] || siglevel=Required
 echo "nexusos repository: SigLevel = $siglevel"
 
 profile=/profile
