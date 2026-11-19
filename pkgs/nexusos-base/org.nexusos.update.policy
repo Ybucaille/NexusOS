@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- pkexec nexusos-update, as the desktop shell runs it: an administrator
+     password once, kept for a few minutes. the check alone needs none. -->
+<policyconfig>
+  <vendor>NexusOS</vendor>
+  <vendor_url>https://github.com/Ybucaille/NexusOS</vendor_url>
+  <action id="org.nexusos.update">
+    <description>Update NexusOS</description>
+    <description xml:lang="fr">Mettre à jour NexusOS</description>
+    <message>Authentication is required to update NexusOS</message>
+    <message xml:lang="fr">Une authentification est nécessaire pour mettre à jour NexusOS</message>
+    <icon_name>nexusos-logo</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/nexusos-update</annotate>
+  </action>
+</policyconfig>
