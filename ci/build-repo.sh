@@ -13,8 +13,8 @@ snapshot=${1:-$(date -u -d yesterday +%Y/%m/%d)}
 shift || true
 
 # Dependencies first: later packages install earlier ones from the local repo.
-order=(nexusos-keyring ttf-rubik-vf libcava python-materialyoucolor qt6-m3shapes-git quickshell-git caelestia-cli caelestia-shell
-       papirus-folders qtengine darkly pwvucontrol caelestia-dots nexusos-base nexusos-desktop)
+order=(nexusos-keyring ttf-rubik-vf libcava python-materialyoucolor qt6-m3shapes-git quickshell-git caelestia-cli nexusos-base
+       nexus-shell papirus-folders qtengine darkly pwvucontrol caelestia-dots nexusos-desktop)
 # The keyring exists once ci/signing-key.sh init has run.
 [[ -f $root/pkgs/nexusos-keyring/nexusos.gpg ]] || order=("${order[@]:1}")
 packages=("${@:-${order[@]}}")

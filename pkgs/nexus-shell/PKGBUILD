@@ -1,0 +1,45 @@
+# nexus-shell: the NexusOS desktop shell, started from caelestia-shell 2.5.0
+# and rewritten module by module (https://github.com/Ybucaille/nexus-shell).
+# It still installs where caelestia-shell did (quickshell config "caelestia",
+# QML module Caelestia), so the Caelestia dots and CLI keep driving it, and it
+# replaces caelestia-shell on upgrade.
+# The native plugin links against Qt and Quickshell: rebuild it with them.
+
+pkgname=nexus-shell
+pkgver=0.1.0
+pkgrel=1
+_commit=049099b14e6d42ae5d797387f91fcd2a0ad4fa18
+pkgdesc='The NexusOS desktop shell'
+arch=(x86_64)
+url='https://github.com/Ybucaille/nexus-shell'
+license=('GPL-3.0-only')
+depends=('nexusos-base>=0.5.0' caelestia-cli quickshell-git glibc gcc-libs
+         ddcutil brightnessctl
+         libcava networkmanager lm_sensors aubio libpipewire libqalculate power-profiles-daemon
+         ttf-material-symbols-variable ttf-rubik-vf ttf-cascadia-code-nerd
+         qt6-base qt6-declarative qt6-imageformats qt6-m3shapes-git
+         swappy fish bash)
+optdepends=('fprintd: fingerprint unlock for the lock screen')
+makedepends=(git cmake ninja qt6-shadertools)
+provides=(caelestia-shell)
+conflicts=(caelestia-shell caelestia-shell-git)
+replaces=(caelestia-shell)
+source=("$pkgname::git+$url.git#commit=$_commit")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname"
+  cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_INSTALL_PREFIX=/ \
+    -DVERSION=$pkgver \
+    -DGIT_REVISION=$_commit \
+    -DDISTRIBUTOR="NexusOS (package: $pkgname)"
+  cmake --build build
+}
+
+package() {
+  cd "$pkgname"
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

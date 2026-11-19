@@ -3,16 +3,17 @@
 
 pkgname=nexusos-desktop
 pkgver=0.1.0
-pkgrel=2
-pkgdesc='NexusOS desktop session: Hyprland with the Caelestia shell'
+pkgrel=3
+pkgdesc='NexusOS desktop session: Hyprland with nexus-shell'
 arch=(any)
 url='https://github.com/Ybucaille/NexusOS'
 license=('GPL-3.0-only')
 depends=(
   # Session
   nexusos-base greetd greetd-tuigreet uwsm caelestia-dots python
-  # Dots components, from the pinned manifest
-  caelestia-shell caelestia-cli
+  # Dots components, from the pinned manifest; nexus-shell stands in for
+  # caelestia-shell, which it provides
+  nexus-shell caelestia-cli
   hyprland xdg-desktop-portal-hyprland xdg-desktop-portal-gtk ttf-jetbrains-mono-nerd
   fish eza zoxide direnv foot fastfetch btop micro thunar starship
   firefox caelestia-firefox-theme

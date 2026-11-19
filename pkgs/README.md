@@ -11,7 +11,7 @@ The desktop set below was validated together on 2026-10-20 with Qt 6.12:
 | Package | Version | Change from AUR |
 |---|---|---|
 | `quickshell-git` | `2d3b3e9` | upstream backport `5d5d498` (Qt 6.12 build fix); commit pinned |
-| `caelestia-shell` | 2.5.0 | two patches: Nmcli process leak, notification null guards |
+| `nexus-shell` | 0.1.0 | not from the AUR: the NexusOS shell, started from caelestia-shell 2.5.0 ([Ybucaille/nexus-shell](https://github.com/Ybucaille/nexus-shell)); replaces `caelestia-shell` |
 | `caelestia-cli` | 1.1.3 | none |
 | `qt6-m3shapes-git` | `32ad9ce` | commit pinned |
 | `python-materialyoucolor` | 3.0.2 | pinned below AUR (3.0.4); `x86_64` instead of `any` |
@@ -150,7 +150,7 @@ for a boot test in CI.
 ## Qt coupling
 
 Quickshell uses private Qt APIs, and `qt6-m3shapes-git` and the
-`caelestia-shell` plugin link against Qt. A `qt6-base` update can break the
+`nexus-shell` plugin link against Qt. A `qt6-base` update can break the
 shell even when these packages do not change: they must be rebuilt and tested
 against every new Qt before that Qt reaches `stable`.
 
