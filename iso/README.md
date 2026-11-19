@@ -23,10 +23,14 @@ the other TTYs.
 ## Building and testing
 
 ```bash
-ci/build-repo.sh 2026/11/17     # or download the repo-2026-11-17 release into out/repo/2026-11-17
+ci/fetch-repo.sh 2026/11/17     # the signed repo-2026-11-17 release, or ci/build-repo.sh for a local build
 ci/build-iso.sh 2026/11/17      # out/iso/nexusos-2026.11.17-x86_64.iso
 ci/test-iso.sh 2026/11/17       # boots it in QEMU, UEFI then BIOS
 ```
+
+`ci/fetch-repo.sh` checks every signature against the key committed in
+`pkgs/nexusos-keyring`, not against the release's own keyring package, and
+fetches only the packages the database lists.
 
 The build runs in a throwaway container with `CAP_SYS_ADMIN` (pacstrap mounts
 `/proc`, `/sys` and `/dev`), never fully privileged. A signed repository is
@@ -52,7 +56,7 @@ is measured on hardware (see `bench/`).
   the session runs.
 - The 2026/11/17 snapshot brings Hyprland 0.57.2, while the dots were
   validated with 0.56.2. `caelestia-dots` 4a635c6-2 picks upstream `d4c24f8`
-  for the deprecated `group.lock_active()`; the ISO built before it still shows
-  the warning.
+  for the deprecated `group.lock_active()`; Hyprland reports no deprecated
+  option since.
 - The shell shows the Arch logo, read from `os-release`: branding comes with
   `nexusos-base`.

@@ -10,6 +10,10 @@ pacman -Syuu --noconfirm --needed archiso >/dev/null
 # A signed repository is checked through its own keyring, as on a machine.
 siglevel='Optional TrustAll'
 if [[ -f /repo/nexusos.db.sig ]]; then
+  # The image ships no local secret key, and --populate needs one to certify
+  # the NexusOS key.
+  pacman-key --init >/dev/null 2>&1
+  # Bootstrap: the keyring cannot be checked before it is installed.
   cp /repo/nexusos-keyring-*.pkg.tar.zst /tmp/
   pacman -U --noconfirm /tmp/nexusos-keyring-*.pkg.tar.zst >/dev/null
   siglevel=Required
