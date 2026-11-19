@@ -13,10 +13,10 @@ iso=$(ls -t "$root"/out/iso/nexusos-*.iso 2>/dev/null | head -n1)
 echo "testing $(basename "$iso")"
 
 docker run --rm --device /dev/kvm -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e OWNER="$(id -u):$(id -g)" \
-  -v "$root/out/iso:/iso" -v "$root/ci:/ci:ro" archlinux:latest bash -euo pipefail -c '
+  -v "$root/out/iso:/iso" -v "$root/ci:/ci:ro" -v "$root/pkgs/nexusos-base/pacman-retry:/usr/local/bin/pacman-retry:ro" archlinux:latest bash -euo pipefail -c '
 trap "chown -R \$OWNER /iso/test 2>/dev/null || true" EXIT
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
-pacman -Syuu --noconfirm --needed qemu-system-x86 qemu-hw-display-virtio-vga qemu-hw-display-virtio-gpu edk2-ovmf python >/dev/null
+pacman-retry -Syuu --noconfirm --needed qemu-system-x86 qemu-hw-display-virtio-vga qemu-hw-display-virtio-gpu edk2-ovmf python >/dev/null
 rc=0
 for firmware in uefi bios; do python /ci/test-iso.py "/iso/$ISO" "$firmware" /iso/test || rc=1; done
 exit $rc

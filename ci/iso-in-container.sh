@@ -5,7 +5,7 @@ set -euo pipefail
 trap 'chown -R "$OWNER" /out /var/cache/pacman/pkg' EXIT
 
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
-pacman -Syuu --noconfirm --needed archiso >/dev/null
+pacman-retry -Syuu --noconfirm --needed archiso >/dev/null
 
 # Signatures are checked through the repository's own keyring, as on a
 # machine. Signed packages can sit in an unsigned database (local builds added
@@ -53,6 +53,12 @@ rm -r "$profile/airootfs/etc/systemd/system/getty@tty1.service.d"
 rm "$profile/syslinux/splash.png"
 sed -i -e 's/Arch Linux install medium/NexusOS live medium/g' -e 's/MENU TITLE Arch Linux/MENU TITLE NexusOS/' \
   -e '/MENU BACKGROUND/d' "$profile"/efiboot/loader/entries/*.conf "$profile"/syslinux/*.cfg "$profile"/grub/*.cfg
+
+# pacstrap takes its packages from this cache and gives up on a stalled
+# download: fill it first, from an empty database so every dependency comes.
+mkdir /tmp/isodb
+pacman-retry -Syw --noconfirm --config "$profile/pacman.conf" --dbpath /tmp/isodb \
+  $(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$profile/packages.x86_64") >/dev/null
 
 # Dated like the packages, so the same snapshot gives the same version.
 SOURCE_DATE_EPOCH=$(date -u -d "$SNAPSHOT" +%s) mkarchiso -w /work -o /out "$profile"

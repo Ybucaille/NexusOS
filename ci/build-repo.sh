@@ -26,7 +26,7 @@ mkdir -p "$out"
 docker run --rm \
   --memory "${NEXUSOS_BUILD_MEMORY:-6g}" --cpus "${NEXUSOS_BUILD_CPUS:-6}" \
   -e SNAPSHOT="$snapshot" -e PACKAGES="${packages[*]}" -e OWNER="$(id -u):$(id -g)" -e NEXUSOS_SIGNING_KEY \
-  -v "$root/pkgs:/pkgs:ro" -v "$root/ci/build-in-container.sh:/build.sh:ro" -v "$out:/repo" \
+  -v "$root/pkgs:/pkgs:ro" -v "$root/ci/build-in-container.sh:/build.sh:ro" -v "$root/pkgs/nexusos-base/pacman-retry:/usr/local/bin/pacman-retry:ro" -v "$out:/repo" \
   archlinux:latest bash /build.sh
 
 echo "repository: $out"

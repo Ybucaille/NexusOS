@@ -17,7 +17,7 @@ SigLevel = Never
 Server = file:///repo
 EOF
 [[ -f /repo/nexusos.db.tar.zst ]] || repo-add -q /repo/nexusos.db.tar.zst
-pacman -Syuu --noconfirm --needed base-devel git >/dev/null
+pacman-retry -Syuu --noconfirm --needed base-devel git >/dev/null
 
 # The signing subkey stays with root: upstream build code runs as builder and
 # never sees it.
@@ -36,9 +36,10 @@ fi
 # the old database signatures behind, and pacman would reject the database.
 [[ -n ${key:-} ]] || rm -f /repo/nexusos.db*.sig /repo/nexusos.files*.sig
 
-# makepkg refuses to run as root.
+# makepkg refuses to run as root. It installs the build dependencies through
+# pacman-retry too.
 useradd -m builder
-echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
+echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman, /usr/local/bin/pacman-retry' > /etc/sudoers.d/builder
 
 # Packages that only copy files: their runtime dependencies are not needed to
 # build them, and nexusos-desktop's would pull the whole desktop in.
@@ -50,7 +51,7 @@ for pkg in $PACKAGES; do
   chown -R builder: "/home/builder/$pkg"
   deps=-s
   [[ $nodeps == *" $pkg "* ]] && deps=-d
-  (cd "/home/builder/$pkg" && sudo -u builder PKGDEST=/home/builder/out makepkg "$deps" --noconfirm --noprogressbar)
+  (cd "/home/builder/$pkg" && sudo -u builder PKGDEST=/home/builder/out PACMAN=pacman-retry makepkg "$deps" --noconfirm --noprogressbar)
   # A split recipe produces several packages; publish all of them.
   for file in /home/builder/out/*.pkg.tar.zst; do
     cp "$file" /repo/
@@ -60,7 +61,7 @@ for pkg in $PACKAGES; do
     repo-add -q -R "${sign[@]}" /repo/nexusos.db.tar.zst "$file"
   done
   rm -f /home/builder/out/*
-  pacman -Sy --noconfirm >/dev/null
+  pacman-retry -Sy --noconfirm >/dev/null
 done
 
 # The release file ties the database, and through its checksums every package,

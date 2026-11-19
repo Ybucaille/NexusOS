@@ -11,7 +11,7 @@ snapshot=${1:-$(date -u -d yesterday +%Y/%m/%d)}
 repo="$root/out/repo/${snapshot//\//-}"
 [[ -f $repo/nexusos.db ]] || { echo "no repository at $repo, run ci/build-repo.sh first" >&2; exit 1; }
 
-docker run --rm -e SNAPSHOT="$snapshot" -v "$repo:/repo:ro" archlinux:latest bash -euo pipefail -c '
+docker run --rm -e SNAPSHOT="$snapshot" -v "$repo:/repo:ro" -v "$root/pkgs/nexusos-base/pacman-retry:/usr/local/bin/pacman-retry:ro" archlinux:latest bash -euo pipefail -c '
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 printf "\n[nexusos]\nSigLevel = Optional TrustAll\nServer = file:///repo\n" >> /etc/pacman.conf
 # Signatures verify through the keyring package of the repository. Signed
@@ -27,10 +27,10 @@ if [[ -f /repo/nexusos.db.sig ]]; then
   sed -i "s/^SigLevel = Optional TrustAll$/SigLevel = Required/" /etc/pacman.conf
   echo "== signatures required"
 fi
-pacman -Syuu --noconfirm >/dev/null
+pacman-retry -Syuu --noconfirm >/dev/null
 # The engine needs the CLI and git; the desktop packages themselves are not needed.
-pacman -S --noconfirm --needed caelestia-cli caelestia-dots git xdg-user-dirs >/dev/null
-pacman -Sdd --noconfirm nexusos-desktop >/dev/null
+pacman-retry -S --noconfirm --needed caelestia-cli caelestia-dots git xdg-user-dirs >/dev/null
+pacman-retry -Sdd --noconfirm nexusos-desktop >/dev/null
 useradd -m tester
 
 as_tester() { su tester -c "$1"; }
@@ -56,10 +56,10 @@ if as_tester /usr/lib/nexusos/dots-pending; then echo "dots-pending should fail 
 tail -n 5 /tmp/update.log
 
 echo "== identity"
-pacman -S --noconfirm nexusos-base >/dev/null
+pacman-retry -S --noconfirm nexusos-base >/dev/null
 grep -qx ID=nexusos /usr/lib/os-release
 # A filesystem upgrade writes the Arch os-release; the hook must put ours back.
-pacman -S --noconfirm filesystem >/dev/null
+pacman-retry -S --noconfirm filesystem >/dev/null
 grep -qx ID=nexusos /usr/lib/os-release
 test -f /usr/share/pixmaps/nexusos-logo.svg
 grep ^PRETTY_NAME= /usr/lib/os-release

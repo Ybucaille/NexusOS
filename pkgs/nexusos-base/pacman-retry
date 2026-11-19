@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# pacman, run again when downloads fail. archive.archlinux.org often stalls
+# (curl's "Operation too slow"), and pacman stops asking a host after three
+# errors in one transaction. A new transaction starts afresh, and what was
+# already downloaded stays in the cache. Other failures return at once.
+#
+# Usage: pacman-retry [pacman arguments]   (PACMAN_RETRIES more tries, default 3)
+set -uo pipefail
+
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+tries=${PACMAN_RETRIES:-3}
+# stdout stays where it was (a terminal keeps its progress bars); stderr goes
+# through tee, shown as it comes and kept for the check.
+exec 3>&1
+for (( attempt = 1; ; attempt++ )); do
+  pacman "$@" 2>&1 1>&3 3>&- | tee "$log" >&2
+  status=${PIPESTATUS[0]}
+  (( status != 0 )) || exit 0
+  grep -qE 'failed retrieving file|failed to synchronize|failed to retrieve some files' "$log" || exit "$status"
+  (( attempt <= tries )) || exit "$status"
+  echo "pacman-retry: download failed, trying again in $(( 30 * attempt ))s ($attempt/$tries)" >&2
+  sleep $(( 30 * attempt ))
+done

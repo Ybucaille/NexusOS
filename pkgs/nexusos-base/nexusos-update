@@ -137,7 +137,8 @@ cp "$tmp/mirrorlist" "$mirrorlist"
 
 pacman_args=(-Syu)
 (( !yes )) || pacman_args+=(--noconfirm)
-if ! pacman "${pacman_args[@]}"; then
+# A stalled download of the archive is tried again before anything goes back.
+if ! /usr/lib/nexusos/pacman-retry "${pacman_args[@]}"; then
   echo "nexusos-update: pacman failed, restoring the previous release" >&2
   rm -rf "$repo"
   mv "$tmp/old" "$repo"

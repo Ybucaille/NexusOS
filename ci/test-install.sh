@@ -29,10 +29,11 @@ fi
 
 docker run --rm --device /dev/kvm -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e FIRMWARES="$firmwares" \
   -e OWNER="$(id -u):$(id -g)" -v "$root/out/iso:/iso" -v "$root/ci:/ci:ro" -v "$cache:/cache:ro" \
+  -v "$root/pkgs/nexusos-base/pacman-retry:/usr/local/bin/pacman-retry:ro" \
   "${update[@]}" archlinux:latest bash -euo pipefail -c '
 trap "chown -R \$OWNER /iso/test 2>/dev/null || true" EXIT
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
-pacman -Syuu --noconfirm --needed qemu-system-x86 qemu-img qemu-hw-display-virtio-vga qemu-hw-display-virtio-gpu edk2-ovmf python openssl >/dev/null
+pacman-retry -Syuu --noconfirm --needed qemu-system-x86 qemu-img qemu-hw-display-virtio-vga qemu-hw-display-virtio-gpu edk2-ovmf python openssl >/dev/null
 rc=0
 for firmware in $FIRMWARES; do python /ci/test-install.py "/iso/$ISO" "$firmware" /cache /iso/test $([[ -d /update ]] && echo /update) || rc=1; done
 exit $rc
