@@ -258,7 +258,7 @@ try:
             # First in the menu for one boot, as if picked in the Limine menu.
             rest = "\n".join(line for line in menu.split("\n") if not line.startswith("timeout:"))
             test = f"timeout: 1\n\n/{entry}\n\n{rest}\n"
-            run(f"cp {conf} /root/limine.conf && echo {base64.b64encode(test.encode()).decode()} | base64 -d > {conf}")
+            run(f"cp {conf} {conf}.orig && echo {base64.b64encode(test.encode()).decode()} | base64 -d > {conf}")
             vm.send("systemctl reboot\n")
             vm.login(password)
             started(vm)
@@ -267,7 +267,8 @@ try:
             check(f"booted snapshot {pre}: overlay root, snapshot {before} as before the update",
                   state.split("\n") == [f"nexusos.snapshot={pre}", "overlay", before], state.replace("\n", " | "))
             desktop(vm, f"snapshot-{firmware}")
-            run(f"cp /root/limine.conf {conf}")
+            # On /boot: the snapshot has no copy made after it was taken.
+            run(f"mv {conf}.orig {conf}")
 except TimeoutError as error:
     check("serial console", False, str(error))
 finally:
