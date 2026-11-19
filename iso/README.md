@@ -7,7 +7,7 @@ package of the same Arch snapshot, with this directory laid over it:
 |---|---|
 | `packages.x86_64` | appended: `nexusos-keyring`, `nexusos-desktop`, `pipewire-jack` |
 | `profiledef.sh` | appended: NexusOS name and label, zstd squashfs, permissions |
-| `airootfs/` | copied over releng's: live user, greetd, graphical target, package sources hook |
+| `airootfs/` | copied over releng's: live user, greetd, graphical target, build hooks (package sources, archinstall fix) |
 
 The build also removes releng's root autologin on tty1 (greetd owns it), and
 the Arch name and logo from the boot menus, and adds the installer
@@ -25,6 +25,11 @@ image like releng's) writes instead:
   with the build's signature level (`Required` for a signed release).
 
 The installer copies both to the installed system.
+
+A second build hook, `nexusos-archinstall.hook`, fixes archinstall 4.5, which
+drops the snapper setting of a configuration file (subvolume names read as
+strings, compared with `Path("@")`). The build fails if the image does not
+carry the fix, so a newer archinstall is looked at before the patch goes.
 
 ## Live session
 

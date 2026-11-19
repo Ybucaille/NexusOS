@@ -196,11 +196,14 @@ try:
     check("NexusOS identity", status == 0 and osid == "nexusos", osid)
     status, entries = run("grep -rh '^/' /boot --include limine.conf")
     check("boot menu names NexusOS", status == 0 and entries and "Arch" not in entries, entries.replace("\n", " | "))
-    # Not snapper: archinstall 4.5 reads subvolume names from a configuration
-    # file as strings, never equal to its Path("@"), and drops the snapshot
-    # setting. Its menus build Paths, so an interactive install gets snapper.
     status, root = run("findmnt -rno FSTYPE,OPTIONS /")
     check("Btrfs root subvolume", status == 0 and root.startswith("btrfs ") and "subvol=/@" in root, root)
+    # From the configuration file, with the archinstall fix of the ISO
+    # (nexusos-archinstall.hook).
+    status, snapper = run("snapper --csvout list-configs --columns config,subvolume | tail -n +2 | sort | tr '\\n' ' ';"
+                          " systemctl is-enabled snapper-timeline.timer snapper-cleanup.timer | tr '\\n' ' '")
+    check("snapper configs for / and /home, timers enabled",
+          status == 0 and snapper.split() == ["home,/home", "root,/", "enabled", "enabled"], snapper)
     repositories(vm)
     status, _ = run("for i in $(seq 60); do pgrep -x tuigreet >/dev/null && break; sleep 1; done; pgrep -x tuigreet", 90)
     check("greetd shows tuigreet", status == 0)
@@ -218,6 +221,8 @@ try:
         check(f"nexusos-update to {target}", status == 0 and f"now on snapshot {target}" in log,
               f"{time.monotonic() - start:.0f}s")
         print(log, flush=True)
+        status, pair = run(f"snapper --csvout -c root list --columns type,description | grep -cE '^(pre|post),.*nexusos-update {target}'")
+        check("snapper pre and post snapshots of the update", status == 0 and pair == "2", pair)
         vm.send("systemctl reboot\n")
         vm.login(password)
         check("reboot after the update", True)

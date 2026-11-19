@@ -51,10 +51,10 @@ ci/test-install.sh 2026/11/18 uefi     # one firmware
 The test boots the newest ISO next to a blank 40 GB disk, runs
 `nexusos-install --silent` with the shipped defaults plus a disk layout and
 throwaway credentials, then boots the disk alone. It checks the boot menu, the
-Btrfs root subvolume, the identity, the package sources (synced, nothing to
-upgrade), greetd with tuigreet, then has greetd open the test user's session
-and checks Hyprland and the Caelestia shell. Logs and screenshots land in
-`out/iso/test/`.
+Btrfs root subvolume, snapper for `/` and `/home`, the identity, the package
+sources (synced, nothing to upgrade), greetd with tuigreet, then has greetd
+open the test user's session and checks Hyprland and the Caelestia shell. Logs
+and screenshots land in `out/iso/test/`.
 
 The guest fetches packages through `out/cache/pacman/` served as a pacman
 `CacheServer`, removed from the installed mirrorlist before the first boot.
@@ -69,5 +69,6 @@ disk, three times at most.
 - No Limine entries for snapper snapshots yet (VISION: rollback from the
   bootloader).
 - archinstall 4.5 drops the snapper setting of a configuration file: it reads
-  subvolume names as strings and compares them with `Path("@")`. The menus
-  are not affected; an unattended install (and the test) gets no snapper.
+  subvolume names as strings and compares them with `Path("@")` (its menus
+  build Paths). The ISO build patches it (`nexusos-archinstall.hook`, see
+  [iso/](../iso/)), so an unattended install gets snapper too.

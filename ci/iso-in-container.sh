@@ -62,3 +62,9 @@ pacman-retry -Syw --noconfirm --config "$profile/pacman.conf" --dbpath /tmp/isod
 
 # Dated like the packages, so the same snapshot gives the same version.
 SOURCE_DATE_EPOCH=$(date -u -d "$SNAPSHOT" +%s) mkarchiso -w /work -o /out "$profile"
+
+# nexusos-archinstall.hook patches archinstall: a newer archinstall that no
+# longer needs it, or reads its configuration otherwise, must not pass unseen.
+grep -q "mods.append(cls(Path(entry\['name'\]), mountpoint))" \
+  /work/x86_64/airootfs/usr/lib/python3*/site-packages/archinstall/lib/models/device.py ||
+  { echo "archinstall was not patched (nexusos-archinstall.hook)" >&2; exit 1; }

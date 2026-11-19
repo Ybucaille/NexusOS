@@ -1,0 +1,14 @@
+# remove from airootfs!
+# Build only, like nexusos-repos.hook.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = archinstall
+
+[Action]
+Description = Fixing the snapper setting of archinstall configuration files...
+When = PostTransaction
+Depends = sh
+Depends = sed
+Exec = /bin/sh /etc/pacman.d/hooks/nexusos-archinstall.sh
