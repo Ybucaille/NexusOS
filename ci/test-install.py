@@ -242,6 +242,9 @@ try:
         repositories(vm)
         status, out = run("nexusos-update --check", 120)
         check("nexusos-update finds nothing newer", status == 2, out)
+        # As the desktop shell asks, without root.
+        status, out = run("runuser -u tester -- nexusos-update --check", 120)
+        check("nexusos-update --check as a user", status == 2, out)
         desktop(vm, f"updated-{firmware}")
 
         status, _ = run("lsinitcpio /boot/initramfs-linux.img | grep -q 'hooks/nexusos-snapshot$'")

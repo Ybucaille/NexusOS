@@ -12,7 +12,8 @@
 # fails, both go back as they were.
 #
 # Usage: nexusos-update [--check] [--yes]
-#   --check  only say whether a newer release exists (exit 0 if so, 2 if not)
+#   --check  only say whether a newer release exists (exit 0 if so, 2 if not);
+#            needs no root, so the desktop shell asks without a password
 #   --yes    do not ask, let pacman answer the defaults
 set -euo pipefail
 
@@ -35,18 +36,22 @@ for arg; do
 done
 
 die() { echo "nexusos-update: $*" >&2; exit 1; }
-(( EUID == 0 )) || die "run as root"
+(( check || EUID == 0 )) || die "run as root"
 [[ -f $key ]] || die "no NexusOS key in $key (nexusos-keyring)"
 
 [[ -r $conf ]] || die "cannot read $conf"
 source=$(sed -n 's/^source *= *//p' "$conf" | tail -n1)
 [[ -n $source ]] || die "no source in $conf"
 
-exec 9>/run/nexusos-update.lock
-flock -n 9 || die "another update is running"
-
-# Same file system as the repository, so the switch is a rename.
-tmp=$(mktemp -d "$lib/update.XXXXXX")
+if (( check )); then
+  # Reads the installed release only: no lock, nothing staged.
+  tmp=$(mktemp -d)
+else
+  exec 9>/run/nexusos-update.lock
+  flock -n 9 || die "another update is running"
+  # Same file system as the repository, so the switch is a rename.
+  tmp=$(mktemp -d "$lib/update.XXXXXX")
+fi
 trap 'rm -rf "$tmp"' EXIT
 export GNUPGHOME=$tmp/gnupg
 mkdir -m 700 "$GNUPGHOME"
