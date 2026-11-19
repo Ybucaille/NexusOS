@@ -1,0 +1,13 @@
+# filesystem owns /usr/lib/os-release and rewrites it with Arch's on every
+# upgrade; put NexusOS's back right after.
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = filesystem
+Target = nexusos-base
+
+[Action]
+Description = Writing the NexusOS os-release...
+When = PostTransaction
+Exec = /usr/bin/cp /usr/share/nexusos/os-release /usr/lib/os-release

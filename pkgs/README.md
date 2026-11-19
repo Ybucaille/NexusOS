@@ -29,6 +29,7 @@ The dots and the packages their components need, validated at dots revision
 | `darkly` | 0.5.39 | built from source instead of `darkly-bin`, provides it |
 | `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
 | `pwvucontrol` | 0.5.3 | none |
+| `nexusos-base` | 0.1.0 | NexusOS: identity (os-release, logo) |
 | `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
 | `nexusos-keyring` | key date | NexusOS: repository signing key (see Signing) |
 
@@ -53,6 +54,16 @@ Login goes through greetd with tuigreet on the TTY, instead of a second
 compositor for the greeter.
 
 `ci/test-dots.sh` checks first install, fast path and update in a container.
+
+## Identity
+
+`filesystem` owns `/usr/lib/os-release`. `nexusos-base` ships NexusOS's in
+`/usr/share/nexusos/os-release` and a pacman hook copies it over Arch's after
+every `filesystem` install or upgrade, as Arch derivatives do rather than
+forking `filesystem` (`ID=nexusos`, `ID_LIKE=arch`). The shell reads the logo
+through `LOGO=nexusos-logo`, `/usr/share/pixmaps/nexusos-logo.svg`, a
+monochrome placeholder it tints with the theme. Removing `nexusos-base` keeps
+the NexusOS file until the next `filesystem` upgrade.
 
 ## Qt coupling
 

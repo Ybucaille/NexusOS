@@ -1,0 +1,7 @@
+NAME="NexusOS"
+PRETTY_NAME="NexusOS"
+ID=nexusos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;79;195;199"
+LOGO=nexusos-logo

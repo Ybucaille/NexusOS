@@ -39,10 +39,10 @@ checked through `nexusos-keyring`, as on a machine. Downloaded packages stay in
 
 The test boots the ISO with KVM and passes `getty.ttys.serial=ttyS0` as an
 SMBIOS credential: systemd opens a root shell on the serial port without any
-test-only change to the image. It checks that the system starts, greetd runs,
-the live user is logged in, Hyprland and the Caelestia shell run and the
-settings portal answers, then saves the serial log, the journal's errors and a
-screenshot of each boot in `out/iso/test/`.
+test-only change to the image. It checks that the system starts and
+identifies as NexusOS, greetd runs, the live user is logged in, Hyprland and
+the Caelestia shell run and the settings portal answers, then saves the serial
+log, the journal's errors and a screenshot of each boot in `out/iso/test/`.
 
 A desktop running in QEMU proves the image works, not that it is fluid: that
 is measured on hardware (see `bench/`).
@@ -58,5 +58,3 @@ is measured on hardware (see `bench/`).
   validated with 0.56.2. `caelestia-dots` 4a635c6-2 picks upstream `d4c24f8`
   for the deprecated `group.lock_active()`; Hyprland reports no deprecated
   option since.
-- The shell shows the Arch logo, read from `os-release`: branding comes with
-  `nexusos-base`.

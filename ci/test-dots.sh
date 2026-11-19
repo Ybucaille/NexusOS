@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Check the pinned dots deployment in a throwaway container: first install,
-# the sh fast path, then an update from an older revision.
+# the sh fast path, then an update from an older revision. Also checks that
+# the NexusOS identity survives a filesystem upgrade.
 #
 # Usage: ci/test-dots.sh [YYYY/MM/DD]   (snapshot of an existing out/repo build)
 set -euo pipefail
@@ -53,6 +54,15 @@ as_tester "/usr/lib/nexusos/dots update" >/tmp/update.log 2>&1 || { cat /tmp/upd
 grep -q "\"applied_rev\": \"$(cat /usr/share/caelestia-dots/REV)\"" "$state"
 if as_tester /usr/lib/nexusos/dots-pending; then echo "dots-pending should fail after update"; exit 1; fi
 tail -n 5 /tmp/update.log
+
+echo "== identity"
+pacman -S --noconfirm nexusos-base >/dev/null
+grep -qx ID=nexusos /usr/lib/os-release
+# A filesystem upgrade writes the Arch os-release; the hook must put ours back.
+pacman -S --noconfirm filesystem >/dev/null
+grep -qx ID=nexusos /usr/lib/os-release
+test -f /usr/share/pixmaps/nexusos-logo.svg
+grep ^PRETTY_NAME= /usr/lib/os-release
 
 echo "== ok"
 '

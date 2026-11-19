@@ -1,0 +1,21 @@
+# NexusOS identity: os-release and logo. filesystem keeps owning
+# /usr/lib/os-release; a pacman hook writes NexusOS's over it after every
+# filesystem upgrade, as Arch derivatives do rather than forking filesystem.
+
+pkgname=nexusos-base
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='NexusOS base system: identity (os-release, logo)'
+arch=(any)
+url='https://github.com/Ybucaille/NexusOS'
+license=('GPL-3.0-only')
+depends=(filesystem)
+source=(os-release nexusos-logo.svg nexusos-os-release.hook)
+sha256sums=(SKIP SKIP SKIP)
+
+package() {
+  install -Dm644 os-release -t "$pkgdir/usr/share/nexusos"
+  # Found by name through LOGO=, like Arch's archlinux-logo.
+  install -Dm644 nexusos-logo.svg -t "$pkgdir/usr/share/pixmaps"
+  install -Dm644 nexusos-os-release.hook -t "$pkgdir/usr/share/libalpm/hooks"
+}

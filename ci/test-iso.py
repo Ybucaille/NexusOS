@@ -115,6 +115,8 @@ try:
     # no partition table on it. Any other failed unit fails the test.
     _, failed = run("systemctl --failed --no-legend --plain | grep -v '^systemd-loop@'")
     check("system started", state in ("running", "degraded") and not failed, state + (": " + failed if failed else ""))
+    status, osid = run(". /etc/os-release && echo $ID")
+    check("NexusOS identity", status == 0 and osid.strip() == "nexusos", osid.strip())
     status, _ = run("systemctl is-active greetd")
     check("greetd active", status == 0)
     status, sessions = run(
@@ -133,7 +135,7 @@ try:
     check("settings portal answers", status == 0, scheme)
     _, deprecated = run(f"{user} hyprctl -i 0 deprecated-config 2>&1 | head -n 20")
     print(f"[{firmware}] hyprctl deprecated-config:\n{deprecated}", flush=True)
-    _, packages = run("pacman -Q nexusos-desktop caelestia-shell quickshell-git hyprland 2>/dev/null")
+    _, packages = run("pacman -Q nexusos-base nexusos-desktop caelestia-shell quickshell-git hyprland 2>/dev/null")
     print(packages, flush=True)
     _, errors = run("journalctl -b -p err --no-pager -o cat | tail -n 40")
     _, user = run("journalctl -b _UID=1000 -p warning --no-pager -o short-monotonic | tail -n 80")
