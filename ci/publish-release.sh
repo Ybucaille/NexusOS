@@ -21,7 +21,9 @@ for f in nexusos-release nexusos.db nexusos.files; do
   [[ -f $dir/$f && -f $dir/$f.sig ]] || { echo "$dir: no signed $f" >&2; exit 1; }
 done
 snapshot=$(field snapshot "$dir/nexusos-release")
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+# Named once: gh finds the repository from the current directory otherwise,
+# and the uploads run from a staging directory outside it.
+export GH_REPO=${GH_REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -61,7 +63,7 @@ for f in "${packages[@]}"; do cp -L "$dir/$f" "$dir/$f.sig" "$tmp/stage/"; done
 cp -L "$dir"/nexusos.{db,files}{,.sig} "$dir"/nexusos-release{,.sig} "$tmp/stage/"
 cd "$tmp/stage"
 
-gh api "repos/$repo/releases/tags/$tag" --jq '.assets[] | "\(.digest // "") \(.name)"' > "$tmp/assets"
+gh api "repos/$GH_REPO/releases/tags/$tag" --jq '.assets[] | "\(.digest // "") \(.name)"' > "$tmp/assets"
 send() {
   local f todo=()
   for f; do
