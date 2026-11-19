@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Make a snapper snapshot of / the system for good, from the next boot on.
+#
+# The root is mounted by name (rootflags=subvol=@), so snapper rollback, which
+# changes the default subvolume, has no effect. Instead a writable copy of the
+# snapshot takes the name of the root subvolume, the snapshots (a subvolume
+# nested in the root one) move into it, and the root as it was is kept next to
+# it as <name>.old-<date>. The snapshot's kernel and initramfs go back to /boot
+# when they differ from those there (boot-snapshots keeps them). Works from the
+# running system or from the snapshot booted read-only from the boot menu,
+# where it defaults to that snapshot.
+#
+# Usage: nexusos-rollback [NUMBER] [--yes]
+set -euo pipefail
+
+die() { echo "nexusos-rollback: $*" >&2; exit 1; }
+
+n= yes=0
+for arg; do
+  case $arg in
+    --yes) yes=1 ;;
+    [0-9]*) [[ $arg =~ ^[0-9]+$ && -z $n ]] || die "usage: nexusos-rollback [NUMBER] [--yes]"; n=$arg ;;
+    *) die "usage: nexusos-rollback [NUMBER] [--yes]" ;;
+  esac
+done
+
+(( EUID == 0 )) || die "run as root"
+cmdline=$(< /proc/cmdline)
+arg() { tr ' ' '\n' <<<"$cmdline" | sed -n "s/^$1=//p" | tail -n1; }
+[[ -n $n ]] || n=$(arg nexusos.snapshot)
+[[ -n $n ]] || die "which snapshot? nexusos-rollback NUMBER (snapper list)"
+[[ ! -e /var/lib/pacman/db.lck ]] || die "pacman is running"
+exec 9>/run/nexusos-update.lock
+flock -n 9 || die "an update is running"
+
+# The root subvolume by name, also when a snapshot is booted.
+subvol=$(arg rootflags | tr ',' '\n' | sed -n 's/^subvol=//p' | tail -n1)
+subvol=${subvol#/}
+subvol=${subvol%%/.snapshots/*}
+[[ -n $subvol && $subvol != */* ]] || die "the root is not a named top-level subvolume (rootflags=subvol=)"
+root=$(arg root)
+device=$(findfs "$root" 2>/dev/null) || device=$root
+[[ -b $device ]] || die "cannot find the root device $root"
+
+top=$(mktemp -d /run/nexusos-rollback.XXXXXX)
+trap 'umount "$top" 2>/dev/null; rmdir "$top"' EXIT
+mount -o subvolid=5 "$device" "$top"
+snapshots=$top/$subvol/.snapshots
+snap=$snapshots/$n/snapshot
+[[ -f $snapshots/$n/info.xml ]] && btrfs subvolume show "$snap" >/dev/null 2>&1 || die "no snapshot $n of /"
+field() { sed -n "s|.*<$1>\(.*\)</$1>.*|\1|p" "$snapshots/$n/info.xml" | sed 's/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g'; }
+
+# The kernels to put back on /boot: those of the snapshot that /boot no longer
+# has. Without a note from boot-snapshots, the kernel on /boot must already be
+# the snapshot's.
+restore=()
+if [[ -f $snapshots/$n/nexusos-boot ]]; then
+  while read -r kernel id; do
+    for f in vmlinuz-$kernel initramfs-$kernel.img; do
+      [[ -f /boot/nexusos/$id/$f ]] || die "the copy of $f for snapshot $n is gone from /boot/nexusos/$id"
+      [[ -f /boot/$f && $(sha256sum < "/boot/$f") == "$(sha256sum < "/boot/nexusos/$id/$f")" ]] || restore+=("$id/$f")
+    done
+  done < "$snapshots/$n/nexusos-boot"
+else
+  for k in /boot/vmlinuz-*; do
+    [[ -f $k ]] || continue
+    found=
+    for m in "$snap"/usr/lib/modules/*/; do
+      [[ -f $m/vmlinuz && $(sha256sum < "$m/vmlinuz") == "$(sha256sum < "$k")" ]] && found=1 && break
+    done
+    [[ -n $found ]] || die "snapshot $n does not have the kernel of $k, and no copy of its own"
+  done
+fi
+
+old=$subvol.old-$(date +%Y%m%d-%H%M%S)
+echo "Snapshot $n ($(field date) UTC, $(field description)) becomes the system from the next boot."
+echo "The system as it is now stays in the subvolume $old."
+(( ${#restore[@]} == 0 )) || echo "Back on /boot: ${restore[*]##*/}"
+if (( !yes )); then
+  read -rp "Go on? [y/N] " answer
+  [[ $answer == [yY]* ]] || exit 1
+fi
+
+new=$top/$subvol.new-$n
+[[ ! -e $new ]] || btrfs subvolume delete "$new" >/dev/null
+btrfs subvolume snapshot "$snap" "$new" >/dev/null
+# Where the nested snapshots subvolume was, the snapshot holds an empty directory.
+rmdir "$new/.snapshots"
+# genfstab names the root by id as well: the copy has another one.
+sed -i -E '/^[^#][^[:space:]]*[[:space:]]+\/[[:space:]]/ s/(,subvolid=[0-9]+|subvolid=[0-9]+,)//' "$new/etc/fstab"
+mv "$snapshots" "$new/.snapshots"
+if ! { mv "$top/$subvol" "$top/$old" && mv "$new" "$top/$subvol"; }; then
+  [[ -e $top/$subvol ]] || mv "$top/$old" "$top/$subvol"
+  mv "$new/.snapshots" "$top/$subvol/.snapshots"
+  die "could not swap the root subvolume; nothing changed"
+fi
+
+for f in "${restore[@]}"; do
+  cp "/boot/nexusos/$f" "/boot/${f#*/}.new"
+  mv "/boot/${f#*/}.new" "/boot/${f#*/}"
+done
+sync
+echo "Done: reboot to start snapshot $n. Once it runs well, delete the old system:"
+echo "  mount -o subvolid=5 $device /mnt && btrfs subvolume delete /mnt/$old && umount /mnt"

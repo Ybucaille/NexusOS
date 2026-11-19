@@ -280,6 +280,27 @@ try:
                 desktop(vm, f"snapshot-{firmware}")
                 # On /boot: the snapshot has no copy made after it was taken.
                 run(f"mv {conf}.orig {conf}")
+
+                # For good this time, from the updated system: the pre snapshot
+                # becomes the root subvolume (nexusos-rollback).
+                vm.send("systemctl reboot\n")
+                vm.login(password)
+                started(vm)
+                status, out = run(f"nexusos-rollback {pre} --yes", 300)
+                check(f"nexusos-rollback to snapshot {pre}", status == 0, out.split("\n")[-1])
+                print(out, flush=True)
+                vm.send("systemctl reboot\n")
+                vm.login(password)
+                started(vm)
+                status, state = run("findmnt -no FSTYPE,OPTIONS / | grep -o '^btrfs\\|subvol=/@$';"
+                                    " sed -n 's/^snapshot=//p' /var/lib/nexusos/repo/nexusos-release;"
+                                    f" snapper --csvout -c root list --columns type,description | grep -cE '^(pre|post),.*nexusos-update {target}';"
+                                    " btrfs subvolume list / | grep -c ' path @\\.old-'")
+                check(f"rolled back: root subvolume @, snapshot {before}, snapshots kept, old root kept",
+                      state.split("\n") == ["btrfs", "subvol=/@", before, "2", "1"], state.replace("\n", " | "))
+                status, out = run("nexusos-update --check", 120)
+                check("nexusos-update offers the update again", status == 0, out)
+                desktop(vm, f"rollback-{firmware}")
 except TimeoutError as error:
     check("serial console", False, str(error))
 finally:
