@@ -95,7 +95,27 @@ Only where it pays off:
   (the shell requires the git version), `caelestia-shell`, `caelestia-cli`;
 - llama.cpp / Ollama for CUDA sm_86 and AVX-512;
 - meta-packages `nexusos-base`, `nexusos-desktop`, `nexusos-tuning`;
-- later, `nexus`, built from Nexus release tags.
+- later, `nexus`, built from Nexus release tags, and `nexusos-secrets`.
+
+## Secrets
+
+An OS-level vault for passwords, TOTP codes, SSH and GPG keys, offered at
+install time and optional:
+
+- **System package, not part of Nexus:** the Secret Service D-Bus API from
+  KeePassXC (TOTP included) or gnome-keyring, unlocked at login through PAM
+  and greetd; FIDO2 keys (pam-u2f) and fprintd as options.
+- **Nexus never reads the vault directly** (prompt injection): a broker, in
+  Rust, grants access per entry and per request after a confirmation the
+  system shows (once / always / deny). Where possible Nexus never sees the
+  value: the broker fills the field or injects the token. Every access is
+  logged and revocable. Never allowed: export, reading TOTP codes, changing
+  the master password.
+- **Order:** the standard vault alone first (archinstall profile, PAM in
+  greetd); the broker once Nexus is in the OS.
+
+Keeping TOTP codes in the same vault as the passwords weakens two-factor
+authentication; a hardware key stays preferable for critical accounts.
 
 ## Desktop: Caelestia
 
