@@ -20,6 +20,9 @@ if compgen -G "/repo/nexusos-keyring-*.pkg.tar.zst" >/dev/null; then
   pacman -U --noconfirm /tmp/nexusos-keyring-*.pkg.tar.zst >/dev/null
 fi
 [[ ! -f /repo/nexusos.db.sig ]] || siglevel=Required
+# A local build and a release can give the same file name to different bytes:
+# a cached copy would fail the checksum of the repository, which wins.
+for f in /repo/*.pkg.tar.zst; do rm -f "/var/cache/pacman/pkg/${f##*/}" "/var/cache/pacman/pkg/${f##*/}.sig"; done
 echo "nexusos repository: SigLevel = $siglevel"
 
 profile=/profile
