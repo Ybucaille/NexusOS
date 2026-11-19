@@ -17,7 +17,8 @@ vanilla run; results are never compared across snapshots.
 
 The runs of the daily install (`results/*-baseline.json`) record the
 starting point: what NexusOS was built to improve on. They are history, not
-the comparison target.
+the comparison target. Results describe the machine they ran on (hardware,
+disks, running programs), so they stay on it: `results/` is not tracked.
 
 ## Clean-run protocol
 
