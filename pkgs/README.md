@@ -141,7 +141,9 @@ on every push touching `pkgs/` or the repository build scripts, weekly, and
 on demand for a given date, then publishes the repository as the release
 `repo-<YYYY-MM-DD>` and in the `testing` channel: one asset per package plus
 `nexusos.db`, `nexusos.files` and `nexusos-release`, each with its signature.
-A run for an existing date replaces its assets.
+A run for an existing date replaces its assets. Without a given date, a run
+builds yesterday's snapshot, or the one testing is on when that is newer, so
+a push always reaches testing.
 
 ## Signing
 
