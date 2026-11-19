@@ -1,0 +1,10 @@
+#!/bin/sh
+# snapper plugin: boot entries for the snapshots of / (boot-snapshots). A
+# failure only costs the boot entry: snapper, and nexusos-update with it,
+# would fail on a plugin that does.
+[ "$2" = / ] || exit 0
+case $1 in
+  create-snapshot-post) /usr/lib/nexusos/boot-snapshots record "$4" || true ;;
+  delete-snapshot-post) /usr/lib/nexusos/boot-snapshots update || true ;;
+esac
+exit 0

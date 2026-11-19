@@ -1,0 +1,18 @@
+#!/usr/bin/ash
+
+# The root is the read-only snapshot: the overlay keeps writes in memory.
+run_latehook() {
+    local n
+    n="$(getarg nexusos.snapshot)"
+    [ -n "$n" ] || return 0
+    msg ":: snapshot $n: read-only, changes stay in memory"
+    mkdir -p /nexusos/lower /nexusos/rw
+    mount --move /sysroot /nexusos/lower
+    mount -t tmpfs -o mode=0755 nexusos-rw /nexusos/rw
+    mkdir /nexusos/rw/upper /nexusos/rw/work
+    mount -t overlay -o lowerdir=/nexusos/lower,upperdir=/nexusos/rw/upper,workdir=/nexusos/rw/work nexusos-snapshot /sysroot
+    # The snapshot's fstab mounts / as the root subvolume: remounting the
+    # overlay with those options would fail. The change stays in memory.
+    awk '$2 == "/" && $1 !~ /^#/ {print "# root is snapshot '"$n"' (nexusos.snapshot): " $0; next} {print}' \
+        /sysroot/etc/fstab > /nexusos/fstab && cat /nexusos/fstab > /sysroot/etc/fstab
+}

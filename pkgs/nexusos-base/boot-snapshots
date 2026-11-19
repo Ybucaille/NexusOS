@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Limine boot entries for the snapper snapshots of /: a system an update broke
+# boots from the boot menu as it was before.
+#
+# Limine reads only the boot partition, which snapshots of / do not hold. When
+# snapper takes a snapshot (its plugin runs "record"), the kernel and
+# initramfs in /boot, those of the system being snapshotted, are copied to
+# /boot/nexusos/<hash>/, one copy for every snapshot with the same pair, and
+# noted next to the snapshot. "update" then lists under "NexusOS snapshots" in
+# limine.conf the newest snapshots taken before a change (pre, as
+# nexusos-update takes) and the newest other one, and removes the copies no
+# entry uses. A snapshot boots read-only, its changes kept in memory (the
+# nexusos-snapshot mkinitcpio hook).
+#
+# Usage: boot-snapshots record NUMBER | update
+set -euo pipefail
+
+snapshots=/.snapshots
+store=/boot/nexusos
+keep_pre=5 keep_other=1
+begin='# >>> NexusOS snapshots, written by /usr/lib/nexusos/boot-snapshots'
+end='# <<< NexusOS snapshots'
+
+die() { echo "boot-snapshots: $*" >&2; exit 1; }
+
+# cmp is in diffutils, not in base.
+same() { [[ $(sha256sum < "$1") == "$(sha256sum < "$2")" ]]; }
+
+field() { sed -n "s|.*<$1>\(.*\)</$1>.*|\1|p" "$snapshots/$2/info.xml" | sed 's/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g'; }
+
+# A post snapshot holds what the system already is; never offered.
+record() {
+  local n=$1 snap=$snapshots/$1/snapshot k kernel initrd m id need avail lines=
+  [[ -d $snap && $(field type "$n") != post ]] || return 0
+  # Mid-transaction, /boot and the snapshot may belong to different systems.
+  [[ ! -e /var/lib/pacman/db.lck ]] || { echo "boot-snapshots: pacman is running, no boot entry for snapshot $n" >&2; return 0; }
+  for k in /boot/vmlinuz-*; do
+    [[ -f $k ]] || continue
+    kernel=${k#/boot/vmlinuz-} initrd=/boot/initramfs-${k#/boot/vmlinuz-}.img
+    [[ -f $initrd ]] || continue
+    for m in "$snap"/usr/lib/modules/*/; do
+      [[ $(cat "$m/pkgbase" 2>/dev/null) == "$kernel" ]] && same "$m/vmlinuz" "$k" && break
+      m=
+    done
+    [[ -n $m ]] || continue
+    id=$(cat "$k" "$initrd" | sha256sum | cut -c1-16)
+    if [[ ! -d $store/$id ]]; then
+      # Room left for a kernel update after the copy.
+      need=$(du -cb "$k" "$initrd" | tail -n1 | cut -f1)
+      avail=$(df --output=avail -B1 /boot | tail -n1)
+      (( avail > 3 * need )) || { echo "boot-snapshots: /boot too full, no boot entry for snapshot $n ($kernel)" >&2; continue; }
+      mkdir -p "$store"
+      rm -rf "$store/.new"
+      mkdir "$store/.new"
+      cp "$k" "$initrd" "$store/.new/"
+      mv "$store/.new" "$store/$id"
+    fi
+    lines+="$kernel $id"$'\n'
+  done
+  [[ -n $lines ]] || return 0
+  printf '%s' "$lines" > "$snapshots/$n/nexusos-boot.new"
+  mv "$snapshots/$n/nexusos-boot.new" "$snapshots/$n/nexusos-boot"
+}
+
+update() {
+  local conf base n type pre=() other=() chosen=() kernel id prefix cmdline subvol title block= used=() d
+  conf=$(find /boot -name limine.conf -print -quit 2>/dev/null)
+  [[ -n $conf ]] || return 0
+  # kernel, path prefix and command line of the entries outside the block.
+  base=$(awk -v begin="$begin" -v end="$end" '
+    $0 == begin {skip = 1} $0 == end {skip = 0; next} skip {next}
+    /^\/[^\/]/ {k = ""}
+    /^[ \t]+path:.*:\/vmlinuz-/ {p = $0; sub(/^[ \t]+path:[ \t]*/, "", p); k = p; sub(/.*:\/vmlinuz-/, "", k); sub(/:\/vmlinuz-.*/, "", p)}
+    /^[ \t]+cmdline:/ && k != "" && !(k in seen) {c = $0; sub(/^[ \t]+cmdline:[ \t]*/, "", c); seen[k]; print k "\t" p "\t" c}
+  ' "$conf")
+
+  for d in $(ls -d "$snapshots"/[0-9]*/ 2>/dev/null | sed 's|.*/\([0-9]*\)/$|\1|' | sort -rn); do
+    [[ -f $snapshots/$d/nexusos-boot ]] || continue
+    type=$(field type "$d")
+    if [[ $type == pre ]]; then
+      if (( ${#pre[@]} < keep_pre )); then pre+=("$d"); fi
+    elif [[ $type != post ]]; then
+      if (( ${#other[@]} < keep_other )); then other+=("$d"); fi
+    fi
+  done
+  mapfile -t chosen < <(printf '%s\n' "${pre[@]}" "${other[@]}" | sed '/^$/d' | sort -rn)
+
+  for n in "${chosen[@]}"; do
+    while read -r kernel id; do
+      [[ -f $store/$id/vmlinuz-$kernel ]] || continue
+      IFS=$'\t' read -r _ prefix cmdline < <(grep -P "^\Q$kernel\E\t" <<<"$base") || continue
+      subvol=$(grep -oP '(?<=rootflags=subvol=)[^ ,]+' <<<"$cmdline" || true)
+      subvol=${subvol#/}
+      # Snapshots sit in /.snapshots, a subvolume nested in the root one.
+      cmdline=$(sed -E 's/ ?rootflags=subvol=[^ ]*//' <<<"$cmdline")
+      cmdline+=" rootflags=subvol=${subvol:+$subvol/}.snapshots/$n/snapshot nexusos.snapshot=$n"
+      title="$n - $(field date "$n" | cut -c1-16) UTC - $(field description "$n")"
+      (( $(wc -l < "$snapshots/$n/nexusos-boot") == 1 )) || title+=" ($kernel)"
+      block+="//$title"$'\n'
+      block+="    comment: read-only, changes are lost at shutdown"$'\n'
+      block+="    protocol: linux"$'\n'
+      block+="    path: $prefix:/nexusos/$id/vmlinuz-$kernel"$'\n'
+      block+="    cmdline: $cmdline"$'\n'
+      block+="    module_path: $prefix:/nexusos/$id/initramfs-$kernel.img"$'\n'
+      used+=("$id")
+    done < "$snapshots/$n/nexusos-boot"
+  done
+
+  {
+    awk -v begin="$begin" -v end="$end" '$0 == begin {skip = 1} !skip {print} $0 == end {skip = 0}' "$conf" |
+      sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+    [[ -z $block ]] || printf '\n%s\n/NexusOS snapshots\n%s%s\n' "$begin" "$block" "$end"
+  } > "$conf.new"
+  if same "$conf.new" "$conf"; then rm "$conf.new"; else mv "$conf.new" "$conf"; fi
+
+  for d in "$store"/*/; do
+    [[ -d $d ]] || continue
+    id=$(basename "$d")
+    [[ " ${used[*]} " == *" $id "* ]] || rm -rf "$d"
+  done
+}
+
+(( EUID == 0 )) || die "run as root"
+case ${1:-} in
+  record) [[ ${2:-} =~ ^[0-9]+$ ]] || die "usage: boot-snapshots record NUMBER"; record "$2"; update ;;
+  update) update ;;
+  *) die "usage: boot-snapshots record NUMBER | update" ;;
+esac

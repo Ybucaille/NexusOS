@@ -29,7 +29,7 @@ The dots and the packages their components need, validated at dots revision
 | `darkly` | 0.5.39 | built from source instead of `darkly-bin`, provides it |
 | `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
 | `pwvucontrol` | 0.5.3 | none |
-| `nexusos-base` | 0.3.0 | NexusOS: identity (os-release, logo), `nexusos-update` |
+| `nexusos-base` | 0.4.0 | NexusOS: identity (os-release, logo), `nexusos-update`, snapshot boot entries |
 | `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
 | `nexusos-keyring` | key date | NexusOS: repository signing key (see Signing) |
 
@@ -92,6 +92,38 @@ a newer release exists.
 
 The CI writes `nexusos-release` next to the database (`snapshot=` and the
 database's `sha256`) and signs it; `ci/fetch-repo.sh` checks it too.
+
+## Snapshot boot entries
+
+When the update breaks the system, the Limine menu boots it as it was before,
+under "NexusOS snapshots". Limine reads only the boot partition, which
+snapshots of `/` do not hold, so `nexusos-base` keeps a copy of the kernel and
+initramfs of each snapshot there:
+
+- snapper runs `/usr/lib/snapper/plugins/50-nexusos-boot` after it creates or
+  deletes a snapshot of `/`. It calls `/usr/lib/nexusos/boot-snapshots`
+  (bash), which copies the kernel and initramfs in `/boot`, those of the
+  system being snapshotted, to `/boot/nexusos/<hash>/`. Snapshots with the same
+  pair share one copy, a post snapshot gets none, and nothing is copied while
+  pacman runs or when `/boot` would be left without room for a kernel update.
+- The menu lists the five newest pre snapshots (`nexusos-update` takes one
+  before each update) and the newest other one, such as a timeline snapshot,
+  between two marker lines at the end of `limine.conf`. Copies no entry uses
+  are removed.
+- An entry boots the read-only snapshot with `nexusos.snapshot=<number>`: the
+  `nexusos-snapshot` mkinitcpio hook (added to `HOOKS` by
+  `/etc/mkinitcpio.conf.d/nexusos.conf`) puts an overlay in memory on top, so
+  the system starts and every change is lost at shutdown, and comments out the
+  `/` line of the snapshot's fstab there (remounting the overlay with the
+  root subvolume's options would fail). `/home` and the
+  other subvolumes are mounted as usual. Making that state the system again
+  is not automated yet: the root is mounted by name (`subvol=@`), so
+  `snapper rollback`, which changes the default subvolume, has no effect.
+
+The hook works with archinstall's default initramfs (busybox, `udev`); an
+initramfs built with the `systemd` hook (LUKS with a FIDO2 or TPM key) boots
+the snapshot without the overlay. `ci/test-install.sh` with `UPDATE=` boots
+the pre snapshot after the update and checks the old system comes back.
 
 ## Channels
 

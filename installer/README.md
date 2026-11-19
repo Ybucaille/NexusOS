@@ -66,8 +66,6 @@ disk, three times at most.
 
 - archinstall's own screens still say Arch Linux, and Limine sits in
   `arch-limine` when not on the removable path.
-- No Limine entries for snapper snapshots yet (VISION: rollback from the
-  bootloader).
 - archinstall 4.5 drops the snapper setting of a configuration file: it reads
   subvolume names as strings and compares them with `Path("@")` (its menus
   build Paths). The ISO build patches it (`nexusos-archinstall.hook`, see

@@ -11,10 +11,12 @@ as ci/fetch-repo.sh leaves it, is then served as the update source:
 nexusos-update moves the installed system to it, and the system is checked
 again after a reboot.
 """
+import base64
 import functools
 import http.server
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -215,6 +217,7 @@ try:
     if release:
         # The newer release, from the test server in place of the published one.
         run(f"sed -i 's|^source *=.*|source = {host}/update|' /etc/nexusos/update.conf")
+        _, before = run("sed -n 's/^snapshot=//p' /var/lib/nexusos/repo/nexusos-release")
         start = time.monotonic()
         status, _ = run("nexusos-update --yes >/root/update.log 2>&1", 1800)
         _, log = run("tail -n 30 /root/update.log")
@@ -237,6 +240,34 @@ try:
         status, out = run("nexusos-update --check", 120)
         check("nexusos-update finds nothing newer", status == 2, out)
         desktop(vm, f"updated-{firmware}")
+
+        # The boot menu offers the system as it was before the update: the
+        # pre snapshot of nexusos-update (boot-snapshots).
+        _, pre = run(f"snapper --csvout -c root list --columns number,type,description"
+                     f" | sed -n 's|^\\([0-9]*\\),pre,nexusos-update {target}$|\\1|p'")
+        _, conf = run("find /boot -name limine.conf")
+        _, menu = run(f"cat {conf}")
+        # Each sub-entry runs to the next one, the last to the end of the block.
+        entry = next((e for e in menu.split("\n//")[1:] if re.search(rf" nexusos\.snapshot={pre}$", e, re.M)), None)
+        entry = entry and "\n".join(line for line in entry.split("\n") if not line.startswith("#"))
+        files = re.findall(r"^ +(?:path|module_path): [^:]+:/(.+)$", entry or "", re.M)
+        status, _ = run("cd /boot && ls " + " ".join(files)) if files else (1, "")
+        check(f"boot menu entry for snapshot {pre or '?'}, its kernel and initramfs on /boot",
+              entry is not None and len(files) == 2 and status == 0, (entry or menu).split("\n")[0])
+        if entry is not None:
+            # First in the menu for one boot, as if picked in the Limine menu.
+            rest = "\n".join(line for line in menu.split("\n") if not line.startswith("timeout:"))
+            test = f"timeout: 1\n\n/{entry}\n\n{rest}\n"
+            run(f"cp {conf} /root/limine.conf && echo {base64.b64encode(test.encode()).decode()} | base64 -d > {conf}")
+            vm.send("systemctl reboot\n")
+            vm.login(password)
+            started(vm)
+            status, state = run("tr ' ' '\\n' < /proc/cmdline | grep '^nexusos.snapshot='; findmnt -no FSTYPE /;"
+                                " sed -n 's/^snapshot=//p' /var/lib/nexusos/repo/nexusos-release")
+            check(f"booted snapshot {pre}: overlay root, snapshot {before} as before the update",
+                  state.split("\n") == [f"nexusos.snapshot={pre}", "overlay", before], state.replace("\n", " | "))
+            desktop(vm, f"snapshot-{firmware}")
+            run(f"cp /root/limine.conf {conf}")
 except TimeoutError as error:
     check("serial console", False, str(error))
 finally:

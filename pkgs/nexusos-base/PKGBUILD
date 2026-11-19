@@ -1,20 +1,24 @@
-# NexusOS base system: identity (os-release, logo) and nexusos-update.
+# NexusOS base system: identity (os-release, logo), nexusos-update and boot
+# entries for snapper snapshots.
 # filesystem keeps owning /usr/lib/os-release; a pacman hook writes NexusOS's
 # over it after every filesystem upgrade, as Arch derivatives do rather than
 # forking filesystem.
 
 pkgname=nexusos-base
-pkgver=0.3.1
+pkgver=0.4.0
 pkgrel=1
-pkgdesc='NexusOS base system: identity (os-release, logo) and updates'
+pkgdesc='NexusOS base system: identity (os-release, logo), updates and snapshot boot entries'
 arch=(any)
 url='https://github.com/Ybucaille/NexusOS'
 license=('GPL-3.0-only')
 depends=(filesystem bash curl gnupg nexusos-keyring pacman tar zstd)
-optdepends=('snapper: a snapshot before and after each update')
-backup=(etc/nexusos/update.conf)
-source=(os-release nexusos-logo.svg nexusos-os-release.hook nexusos-update pacman-retry update.conf)
-sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP)
+optdepends=('snapper: a snapshot before and after each update'
+            'limine: boot entries for the snapshots'
+            'mkinitcpio: booting a read-only snapshot')
+backup=(etc/nexusos/update.conf etc/mkinitcpio.conf.d/nexusos.conf)
+source=(os-release nexusos-logo.svg nexusos-os-release.hook nexusos-update pacman-retry update.conf
+        boot-snapshots snapper-plugin initcpio-install initcpio-hook mkinitcpio.conf)
+sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
 
 package() {
   install -Dm644 os-release -t "$pkgdir/usr/share/nexusos"
@@ -24,4 +28,10 @@ package() {
   install -Dm755 nexusos-update -t "$pkgdir/usr/bin"
   install -Dm755 pacman-retry -t "$pkgdir/usr/lib/nexusos"
   install -Dm644 update.conf -t "$pkgdir/etc/nexusos"
+  install -Dm755 boot-snapshots -t "$pkgdir/usr/lib/nexusos"
+  # snapper runs its plugins in name order; the name must start with a digit.
+  install -Dm755 snapper-plugin "$pkgdir/usr/lib/snapper/plugins/50-nexusos-boot"
+  install -Dm644 initcpio-install "$pkgdir/usr/lib/initcpio/install/nexusos-snapshot"
+  install -Dm644 initcpio-hook "$pkgdir/usr/lib/initcpio/hooks/nexusos-snapshot"
+  install -Dm644 mkinitcpio.conf "$pkgdir/etc/mkinitcpio.conf.d/nexusos.conf"
 }

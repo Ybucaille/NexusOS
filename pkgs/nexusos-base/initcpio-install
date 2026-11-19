@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+build() {
+    add_module overlay
+    add_runscript
+}
+
+help() {
+    cat <<HELPEOF
+Boots a read-only snapper snapshot (nexusos.snapshot= on the kernel command
+line, set by the NexusOS snapshot entries of the boot menu) with an overlay in
+memory on top, so the system starts and every change is lost at shutdown.
+HELPEOF
+}
