@@ -245,6 +245,10 @@ try:
         # As the desktop shell asks, without root.
         status, out = run("runuser -u tester -- nexusos-update --check", 120)
         check("nexusos-update --check as a user", status == 2, out)
+        # A release that brings nexus-shell replaces caelestia-shell.
+        if any(n.startswith("nexus-shell-") and n.endswith(".pkg.tar.zst") for n in os.listdir(release)):
+            status, out = run("pacman -Q nexus-shell && ! pacman -Q caelestia-shell")
+            check("nexus-shell replaces caelestia-shell", status == 0, out)
         desktop(vm, f"updated-{firmware}")
 
         status, _ = run("lsinitcpio /boot/initramfs-linux.img | grep -q 'hooks/nexusos-snapshot$'")
@@ -295,7 +299,7 @@ try:
                 status, state = run("findmnt -no FSTYPE,OPTIONS / | grep -o '^btrfs\\|subvol=/@$';"
                                     " sed -n 's/^snapshot=//p' /var/lib/nexusos/repo/nexusos-release;"
                                     f" snapper --csvout -c root list --columns type,description | grep -cE '^(pre|post),.*nexusos-update {target}';"
-                                    " btrfs subvolume list / | grep -c ' path @\\.old-'")
+                                    " btrfs subvolume list / | grep -c ' path @\\.old-[^/]*$'")
                 check(f"rolled back: root subvolume @, snapshot {before}, snapshots kept, old root kept",
                       state.split("\n") == ["btrfs", "subvol=/@", before, "2", "1"], state.replace("\n", " | "))
                 status, out = run("nexusos-update --check", 120)
