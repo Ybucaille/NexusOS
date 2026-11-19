@@ -1,0 +1,16 @@
+# remove from airootfs!
+# Build only, like releng's uncomment-mirrors.hook, which the build removes.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = pacman
+Target = pacman-mirrorlist
+
+[Action]
+Description = Pointing pacman at the snapshot and the nexusos repository of this image...
+When = PostTransaction
+Depends = sh
+Depends = sed
+Depends = grep
+Exec = /bin/sh /etc/pacman.d/hooks/nexusos-repos.sh

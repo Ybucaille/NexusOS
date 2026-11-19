@@ -29,6 +29,19 @@ cat /iso/packages.x86_64 >> "$profile/packages.x86_64"
 cat /iso/profiledef.sh >> "$profile/profiledef.sh"
 printf '\n[nexusos]\nSigLevel = %s\nServer = file:///repo\n' "$siglevel" >> "$profile/pacman.conf"
 
+# The live system, and the systems installed from it, keep the repository in
+# /var/lib/nexusos/repo and follow the snapshot of this build (nexusos-repos.sh,
+# in place of releng's live mirrors).
+rm "$profile/airootfs/etc/pacman.d/hooks/uncomment-mirrors.hook"
+sed -i -e "s|@SNAPSHOT@|$SNAPSHOT|" -e "s|@SIGLEVEL@|$siglevel|" "$profile/airootfs/etc/pacman.d/hooks/nexusos-repos.sh"
+install -d "$profile/airootfs/var/lib/nexusos"
+cp -a /repo "$profile/airootfs/var/lib/nexusos/repo"
+rm -f "$profile/airootfs/var/lib/nexusos/repo/"*.old
+
+# The installer: archinstall with the NexusOS profile and defaults.
+install -Dm644 /installer/nexusos.py /installer/config.json -t "$profile/airootfs/usr/share/nexusos/installer"
+install -Dm755 /installer/nexusos-install -t "$profile/airootfs/usr/local/bin"
+
 # greetd owns tty1 instead of releng's root autologin.
 rm -r "$profile/airootfs/etc/systemd/system/getty@tty1.service.d"
 

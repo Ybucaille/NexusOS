@@ -9,5 +9,6 @@ Read [VISION.md](VISION.md) for the decisions and their reasons.
 
 Phase 1 done: starting-point measurement ([bench/](bench/)).
 Phase 2 done: the pinned Caelestia packages build, signed, in CI ([pkgs/](pkgs/)).
-Phase 3 in progress: the live ISO boots to the desktop in QEMU ([iso/](iso/)).
+Phase 3 in progress: the live ISO boots to the desktop in QEMU ([iso/](iso/))
+and installs NexusOS with archinstall ([installer/](installer/)).
 

@@ -28,6 +28,13 @@ try:
     check("system started", state in ("running", "degraded") and not failed, state + (": " + failed if failed else ""))
     status, osid = run(". /etc/os-release && echo $ID")
     check("NexusOS identity", status == 0 and osid.strip() == "nexusos", osid.strip())
+    status, repos = run("pacman-conf --repo-list && grep -h '^Server' /etc/pacman.d/mirrorlist && pacman-conf --repo nexusos Server")
+    check("pacman follows the snapshot and the nexusos repository",
+          status == 0 and repos.split("\n")[0] == "nexusos" and "archive.archlinux.org/repos/" in repos
+          and repos.endswith("file:///var/lib/nexusos/repo"), repos.replace("\n", " | "))
+    # Signatures checked through nexusos-keyring; nothing newer than the image.
+    status, updates = run("pacman -Sy --noprogressbar >/dev/null && ! pacman -Qu", 300)
+    check("repositories sync, nothing to upgrade", status == 0, updates)
     status, _ = run("systemctl is-active greetd")
     check("greetd active", status == 0)
     status, sessions = run(

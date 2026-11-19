@@ -7,10 +7,24 @@ package of the same Arch snapshot, with this directory laid over it:
 |---|---|
 | `packages.x86_64` | appended: `nexusos-keyring`, `nexusos-desktop`, `pipewire-jack` |
 | `profiledef.sh` | appended: NexusOS name and label, zstd squashfs, permissions |
-| `airootfs/` | copied over releng's: live user, greetd, graphical target |
+| `airootfs/` | copied over releng's: live user, greetd, graphical target, package sources hook |
 
 The build also removes releng's root autologin on tty1 (greetd owns it), and
-the Arch name and logo from the boot menus.
+the Arch name and logo from the boot menus, and adds the installer
+([installer/](../installer/)) and the nexusos repository it was built from, in
+`/var/lib/nexusos/repo`.
+
+## Package sources
+
+releng's live mirrors would install packages newer than the ones NexusOS was
+tested with. A build-time pacman hook (`nexusos-repos.hook`, removed from the
+image like releng's) writes instead:
+
+- `/etc/pacman.d/mirrorlist`: the Arch Linux Archive snapshot of the build;
+- `/etc/pacman.conf`: `[nexusos]` above `[core]`, from `/var/lib/nexusos/repo`,
+  with the build's signature level (`Required` for a signed release).
+
+The installer copies both to the installed system.
 
 ## Live session
 
@@ -26,6 +40,7 @@ the other TTYs.
 ci/fetch-repo.sh 2026/11/17     # the signed repo-2026-11-17 release, or ci/build-repo.sh for a local build
 ci/build-iso.sh 2026/11/17      # out/iso/nexusos-2026.11.17-x86_64.iso
 ci/test-iso.sh 2026/11/17       # boots it in QEMU, UEFI then BIOS
+ci/test-install.sh 2026/11/17   # installs it onto a QEMU disk, then boots that (installer/)
 ```
 
 `ci/fetch-repo.sh` checks every signature against the key committed in
@@ -40,7 +55,8 @@ checked through `nexusos-keyring`, as on a machine. Downloaded packages stay in
 The test boots the ISO with KVM and passes `getty.ttys.serial=ttyS0` as an
 SMBIOS credential: systemd opens a root shell on the serial port without any
 test-only change to the image. It checks that the system starts and
-identifies as NexusOS, greetd runs, the live user is logged in, Hyprland and
+identifies as NexusOS, pacman follows the snapshot and syncs with nothing to
+upgrade, greetd runs, the live user is logged in, Hyprland and
 the Caelestia shell run and the settings portal answers, then saves the serial
 log, the journal's errors and a screenshot of each boot in `out/iso/test/`.
 

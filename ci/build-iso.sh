@@ -23,7 +23,7 @@ rm -f "$out/nexusos-${snapshot//\//.}-x86_64.iso"
 
 docker run --rm --cap-add SYS_ADMIN --security-opt seccomp=unconfined \
   -e SNAPSHOT="$snapshot" -e OWNER="$(id -u):$(id -g)" \
-  -v "$root/iso:/iso:ro" -v "$root/ci/iso-in-container.sh:/build.sh:ro" -v "$repo:/repo:ro" -v "$out:/out" \
+  -v "$root/iso:/iso:ro" -v "$root/installer:/installer:ro" -v "$root/ci/iso-in-container.sh:/build.sh:ro" -v "$repo:/repo:ro" -v "$out:/out" \
   -v "$cache:/var/cache/pacman/pkg" \
   archlinux:latest bash /build.sh
 

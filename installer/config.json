@@ -1,0 +1,21 @@
+{
+  "archinstall-language": "English",
+  "bootloader_config": {
+    "bootloader": "Limine",
+    "uki": false,
+    "removable": true
+  },
+  "hostname": "nexusos",
+  "kernels": ["linux"],
+  "network_config": {"type": "nm"},
+  "ntp": true,
+  "profile_config": {
+    "profile": {
+      "main": "Desktop",
+      "details": ["NexusOS"],
+      "path": "/usr/share/nexusos/installer/nexusos.py"
+    }
+  },
+  "swap": {"enabled": true, "algorithm": "zstd"},
+  "timezone": "UTC"
+}

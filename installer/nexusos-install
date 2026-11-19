@@ -1,0 +1,5 @@
+#!/bin/sh
+# Install NexusOS from the live medium: archinstall's menus with the NexusOS
+# profile and defaults; the disk, users, locale and graphics driver are asked.
+# Extra arguments go to archinstall (--creds, --silent for an unattended run).
+exec archinstall --config /usr/share/nexusos/installer/config.json --skip-version-check "$@"

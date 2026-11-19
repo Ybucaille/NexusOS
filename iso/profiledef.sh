@@ -9,6 +9,7 @@ install_dir="nexusos"
 airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15' '-b' '1M')
 file_permissions+=(
   ["/usr/local/bin/nexusos-live"]="0:0:755"
+  ["/usr/local/bin/nexusos-install"]="0:0:755"
   ["/etc/sudoers.d"]="0:0:750"
   ["/etc/sudoers.d/nexusos-live"]="0:0:440"
 )
