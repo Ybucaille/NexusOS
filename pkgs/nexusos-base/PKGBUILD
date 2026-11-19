@@ -6,7 +6,7 @@
 
 pkgname=nexusos-base
 pkgver=0.6.0
-pkgrel=1
+pkgrel=2
 pkgdesc='NexusOS base system: identity (os-release, logo), updates, snapshot boot entries and rollback'
 arch=(any)
 url='https://github.com/Ybucaille/NexusOS'

@@ -100,5 +100,7 @@ for f in "${restore[@]}"; do
   mv "/boot/${f#*/}.new" "/boot/${f#*/}"
 done
 sync
+# Subvolumes created beneath the root (systemd makes /var/lib/machines one) stay
+# with the old system: deleting it takes them too.
 echo "Done: reboot to start snapshot $n. Once it runs well, delete the old system:"
-echo "  mount -o subvolid=5 $device /mnt && btrfs subvolume delete /mnt/$old && umount /mnt"
+echo "  mount -o subvolid=5 $device /mnt && btrfs subvolume delete --recursive /mnt/$old && umount /mnt"
