@@ -35,8 +35,8 @@ them to the target:
   profile copies onto the disk.
 
 An installed system therefore stays on the tested snapshot: `pacman -Syu`
-finds nothing newer. Moving to a newer snapshot will move the date and the
-repository together, through the NexusOS update path (not written yet).
+finds nothing newer. Moving to a newer snapshot moves the date and the
+repository together, with `nexusos-update` (nexusos-base).
 
 Arch packages come from the archive during the installation, which needs a
 network connection; the NexusOS packages come from the ISO.
@@ -58,6 +58,9 @@ and checks Hyprland and the Caelestia shell. Logs and screenshots land in
 
 The guest fetches packages through `out/cache/pacman/` served as a pacman
 `CacheServer`, removed from the installed mirrorlist before the first boot.
+A download from the archive that fails stops an unattended archinstall
+(its menus offer to try again): the test then installs again on a blank
+disk, three times at most.
 
 ## Known issues
 

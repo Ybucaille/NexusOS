@@ -135,34 +135,52 @@ def desktop(vm, name):
     print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'desktop-{name}.png'))}", flush=True)
 
 
-# First boot: the live medium installs onto the disk.
-vm = VM(f"live-{firmware}", firmware, drive + ["-cdrom", iso, "-boot", "d"],
-        os.path.join(outdir, f"install-{firmware}.log"))
-installed = False
-try:
-    vm.login()
-    vm.run("systemctl is-system-running --wait", 300)
-    status, _ = vm.run(f"curl -sfO {host}/extra.json && curl -sfO {host}/creds.json"
-                       f" && sed -i '1i CacheServer = {host}/pkg' /etc/pacman.d/mirrorlist")
-    check("test files fetched", status == 0)
-    # The shipped defaults, with the disk and the cache cleanup on top.
-    vm.run("""python -c 'import json; c = json.load(open("/usr/share/nexusos/installer/config.json"));"""
-           """ c.update(json.load(open("extra.json"))); json.dump(c, open("test.json", "w"))'""")
-    start = time.monotonic()
-    status, _ = vm.run("nexusos-install --config test.json --creds creds.json --silent >/dev/null 2>&1", 5400)
-    _, log = vm.run("tail -n 40 /var/log/archinstall/install.log")
-    # archinstall can stop early and still exit 0.
-    installed = check("unattended installation", status == 0 and "Installation completed without any errors" in log,
-                      f"{time.monotonic() - start:.0f}s")
-    if not installed:
-        print(log, flush=True)
-    vm.send("systemctl poweroff\n")
-    vm.wait_poweroff(120)
-except TimeoutError as error:
-    check("live session", False, str(error))
-finally:
-    vm.kill()
+def install(last):
+    """First boot: the live medium installs onto the disk. Returns whether it
+    did, or None when a download from the archive failed and another try may
+    pass: archinstall stops at the first failed pacstrap when unattended (its
+    menus would offer to try again)."""
+    vm = VM(f"live-{firmware}", firmware, drive + ["-cdrom", iso, "-boot", "d"],
+            os.path.join(outdir, f"install-{firmware}.log"))
+    try:
+        vm.login()
+        vm.run("systemctl is-system-running --wait", 300)
+        status, _ = vm.run(f"curl -sfO {host}/extra.json && curl -sfO {host}/creds.json"
+                           f" && sed -i '1i CacheServer = {host}/pkg' /etc/pacman.d/mirrorlist")
+        check("test files fetched", status == 0)
+        # The shipped defaults, with the disk and the cache cleanup on top.
+        vm.run("""python -c 'import json; c = json.load(open("/usr/share/nexusos/installer/config.json"));"""
+               """ c.update(json.load(open("extra.json"))); json.dump(c, open("test.json", "w"))'""")
+        start = time.monotonic()
+        status, _ = vm.run("nexusos-install --config test.json --creds creds.json --silent >/dev/null 2>&1", 5400)
+        _, log = vm.run("tail -n 40 /var/log/archinstall/install.log")
+        # archinstall can stop early and still exit 0.
+        done = status == 0 and "Installation completed without any errors" in log
+        stalled, _ = vm.run("grep -qE 'failed retrieving file|failed to retrieve some files' /var/log/archinstall/install.log")
+        if not done and stalled == 0 and not last:
+            print(f"[install-{firmware}] a download from the archive failed, installing again", flush=True)
+            return None
+        check("unattended installation", done, f"{time.monotonic() - start:.0f}s")
+        if not done:
+            print(log, flush=True)
+        vm.send("systemctl poweroff\n")
+        vm.wait_poweroff(120)
+        return done
+    except TimeoutError as error:
+        check("live session", False, str(error))
+        return False
+    finally:
+        vm.kill()
 
+
+for attempt in range(3):
+    installed = install(last=attempt == 2)
+    if installed is not None:
+        break
+    # A blank machine again: new disk, firmware variables as shipped.
+    subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", disk, "40G"], check=True)
+    if os.path.exists(f"/tmp/vars-live-{firmware}.fd"):
+        os.remove(f"/tmp/vars-live-{firmware}.fd")
 if not installed:
     sys.exit(1)
 
