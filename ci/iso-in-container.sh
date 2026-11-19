@@ -39,7 +39,7 @@ rm "$profile/airootfs/etc/pacman.d/hooks/uncomment-mirrors.hook"
 sed -i -e "s|@SNAPSHOT@|$SNAPSHOT|" -e "s|@SIGLEVEL@|$siglevel|" "$profile/airootfs/etc/pacman.d/hooks/nexusos-repos.sh"
 install -d "$profile/airootfs/var/lib/nexusos"
 cp -a /repo "$profile/airootfs/var/lib/nexusos/repo"
-rm -f "$profile/airootfs/var/lib/nexusos/repo/"*.old
+rm -f "$profile/airootfs/var/lib/nexusos/repo/"*.old "$profile/airootfs/var/lib/nexusos/repo/nexusos-buildkeys"
 
 # The installer: archinstall with the NexusOS profile and defaults.
 install -Dm644 /installer/nexusos.py /installer/config.json -t "$profile/airootfs/usr/share/nexusos/installer"

@@ -13,13 +13,18 @@ on:
       - 'ci/publish-release.sh'
       - '.github/workflows/build-repo.yml'
   schedule:
-    # Weekly, so a new Qt in the Arch snapshot is caught before it reaches stable.
+    # Weekly and in full, so a new toolchain in the Arch snapshot is caught
+    # before it reaches stable.
     - cron: '17 3 * * 1'
   workflow_dispatch:
     inputs:
       snapshot:
         description: 'Arch Linux Archive date (YYYY/MM/DD), empty for yesterday or the newer testing snapshot'
         required: false
+      rebuild:
+        description: 'Rebuild every package instead of reusing the unchanged ones from testing'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -62,9 +67,24 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
 
+      # The previous testing build: packages whose build key did not change are
+      # taken from it, signatures checked, instead of being compiled again.
+      # Without a release or a manifest (the first build), everything is built,
+      # and so it is weekly: the key does not follow the toolchain.
+      # Outside out/repo, so it is not published with this build.
+      - name: Fetch the previous build
+        if: ${{ github.event_name != 'schedule' && !inputs.rebuild }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out/reuse
+          gh release download testing -R "$GITHUB_REPOSITORY" -D out/reuse ||
+            echo '::notice::no testing release to reuse packages from, building everything'
+
       - name: Build
         env:
           NEXUSOS_BUILD_MEMORY: 5g
+          NEXUSOS_REUSE: ${{ github.event_name != 'schedule' && !inputs.rebuild && 'out/reuse' || '' }}
           NEXUSOS_SIGNING_KEY: ${{ secrets.NEXUSOS_SIGNING_KEY }}
         run: |
           [[ -n $NEXUSOS_SIGNING_KEY ]] || echo '::warning::NEXUSOS_SIGNING_KEY is not set, the repository is unsigned'

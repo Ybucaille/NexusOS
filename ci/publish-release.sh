@@ -8,7 +8,9 @@
 # an old database, or a database whose package is not there yet, stops on the
 # mismatch and tries again later. Assets the new database no longer lists
 # leave last. A release never moves to an older snapshot, and assets GitHub
-# already holds with the same checksum are not sent again.
+# already holds with the same checksum are not sent again. The nexusos-buildkeys
+# manifest of a build, when there is one, goes with the databases: it is no
+# part of what machines install, and the next build reads it to reuse packages.
 #
 # Usage: ci/publish-release.sh TAG DIR TITLE NOTES
 #   DIR as build-repo.sh or fetch-repo.sh leave it; GH_TOKEN or gh's login.
@@ -61,6 +63,7 @@ bad=$(printf '%s\n' "${packages[@]}" | grep -v '^[A-Za-z0-9._-]*$' || true)
 mkdir "$tmp/stage"
 for f in "${packages[@]}"; do cp -L "$dir/$f" "$dir/$f.sig" "$tmp/stage/"; done
 cp -L "$dir"/nexusos.{db,files}{,.sig} "$dir"/nexusos-release{,.sig} "$tmp/stage/"
+[[ ! -f $dir/nexusos-buildkeys ]] || cp -L "$dir/nexusos-buildkeys" "$tmp/stage/"
 cd "$tmp/stage"
 
 gh api "repos/$GH_REPO/releases/tags/$tag" --jq '.assets[] | "\(.digest // "") \(.name)"' > "$tmp/assets"
@@ -72,7 +75,9 @@ send() {
   (( !${#todo[@]} )) || gh release upload "$tag" --clobber "${todo[@]}"
 }
 send *.pkg.tar.zst *.pkg.tar.zst.sig
-send nexusos.db nexusos.db.sig nexusos.files nexusos.files.sig
+databases=(nexusos.db nexusos.db.sig nexusos.files nexusos.files.sig)
+[[ ! -f nexusos-buildkeys ]] || databases+=(nexusos-buildkeys)
+send "${databases[@]}"
 send nexusos-release.sig nexusos-release
 
 awk '{print $2}' "$tmp/assets" | while read -r asset; do
