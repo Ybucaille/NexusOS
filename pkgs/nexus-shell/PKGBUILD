@@ -6,14 +6,14 @@
 # The native plugin links against Qt and Quickshell: rebuild it with them.
 
 pkgname=nexus-shell
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-_commit=049099b14e6d42ae5d797387f91fcd2a0ad4fa18
+_commit=e5732ba7f1e4417e28128f4dd087fa4097320e5d
 pkgdesc='The NexusOS desktop shell'
 arch=(x86_64)
 url='https://github.com/Ybucaille/nexus-shell'
 license=('GPL-3.0-only')
-depends=('nexusos-base>=0.5.0' caelestia-cli quickshell-git glibc gcc-libs
+depends=('nexusos-base>=0.5.0' caelestia-cli quickshell-git glibc gcc-libs libnotify
          ddcutil brightnessctl
          libcava networkmanager lm_sensors aubio libpipewire libqalculate power-profiles-daemon
          ttf-material-symbols-variable ttf-rubik-vf ttf-cascadia-code-nerd
