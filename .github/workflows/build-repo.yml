@@ -87,3 +87,8 @@ jobs:
             gh release create "$tag" --title "Package repository $DATE" --notes "$notes"
           gh release edit "$tag" --notes "$notes"
           gh release upload "$tag" --clobber *.pkg.tar.zst* nexusos.db* nexusos.files*
+          # Builds replaced since (an older pkgrel) leave the release once the
+          # new database is up.
+          gh release view "$tag" --json assets --jq '.assets[].name' | while read -r asset; do
+            [[ -e $asset ]] || gh release delete-asset "$tag" "$asset" --yes
+          done
