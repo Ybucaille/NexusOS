@@ -29,7 +29,7 @@ The dots and the packages their components need, validated at dots revision
 | `darkly` | 0.5.39 | built from source instead of `darkly-bin`, provides it |
 | `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
 | `pwvucontrol` | 0.5.3 | none |
-| `nexusos-base` | 0.1.0 | NexusOS: identity (os-release, logo) |
+| `nexusos-base` | 0.2.0 | NexusOS: identity (os-release, logo), `nexusos-update` |
 | `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
 | `nexusos-keyring` | key date | NexusOS: repository signing key (see Signing) |
 
@@ -64,6 +64,36 @@ forking `filesystem` (`ID=nexusos`, `ID_LIKE=arch`). The shell reads the logo
 through `LOGO=nexusos-logo`, `/usr/share/pixmaps/nexusos-logo.svg`, a
 monochrome placeholder it tints with the theme. Removing `nexusos-base` keeps
 the NexusOS file until the next `filesystem` upgrade.
+
+## Updates
+
+An installed system follows one release: the nexusos repository in
+`/var/lib/nexusos/repo` and, in `/etc/pacman.d/mirrorlist`, the Arch Linux
+Archive snapshot it was built and tested against. `nexusos-update` (shipped by
+`nexusos-base`) moves both together:
+
+1. downloads `nexusos-release` from the source in `/etc/nexusos/update.conf`
+   and checks its signature against the NexusOS key alone, not every key
+   pacman trusts;
+2. refuses a snapshot older than the installed one, and stops if nothing
+   changed;
+3. downloads the database, checks it against the release file, then every
+   package it lists that the current repository lacks (checksum and
+   signature), staging the new repository next to the current one;
+4. takes a snapper pre snapshot when snapper manages `/`;
+5. switches the repository and the mirrorlist and runs `pacman -Syu`; if
+   pacman fails, both go back as they were;
+6. takes the post snapshot and requires signatures for `[nexusos]` from then
+   on.
+
+An update interrupted after the switch is resumed by the next run
+(`/var/lib/nexusos/update-pending`). `nexusos-update --check` only says whether
+a newer release exists.
+
+The CI writes `nexusos-release` next to the database (`snapshot=` and the
+database's `sha256`) and signs it; `ci/fetch-repo.sh` checks it too. The
+default source is the GitHub release marked latest, which machines can reach
+only once the releases are public.
 
 ## Qt coupling
 

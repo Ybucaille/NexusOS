@@ -1,21 +1,26 @@
-# NexusOS identity: os-release and logo. filesystem keeps owning
-# /usr/lib/os-release; a pacman hook writes NexusOS's over it after every
-# filesystem upgrade, as Arch derivatives do rather than forking filesystem.
+# NexusOS base system: identity (os-release, logo) and nexusos-update.
+# filesystem keeps owning /usr/lib/os-release; a pacman hook writes NexusOS's
+# over it after every filesystem upgrade, as Arch derivatives do rather than
+# forking filesystem.
 
 pkgname=nexusos-base
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc='NexusOS base system: identity (os-release, logo)'
+pkgdesc='NexusOS base system: identity (os-release, logo) and updates'
 arch=(any)
 url='https://github.com/Ybucaille/NexusOS'
 license=('GPL-3.0-only')
-depends=(filesystem)
-source=(os-release nexusos-logo.svg nexusos-os-release.hook)
-sha256sums=(SKIP SKIP SKIP)
+depends=(filesystem bash curl gnupg nexusos-keyring pacman tar zstd)
+optdepends=('snapper: a snapshot before and after each update')
+backup=(etc/nexusos/update.conf)
+source=(os-release nexusos-logo.svg nexusos-os-release.hook nexusos-update update.conf)
+sha256sums=(SKIP SKIP SKIP SKIP SKIP)
 
 package() {
   install -Dm644 os-release -t "$pkgdir/usr/share/nexusos"
   # Found by name through LOGO=, like Arch's archlinux-logo.
   install -Dm644 nexusos-logo.svg -t "$pkgdir/usr/share/pixmaps"
   install -Dm644 nexusos-os-release.hook -t "$pkgdir/usr/share/libalpm/hooks"
+  install -Dm755 nexusos-update -t "$pkgdir/usr/bin"
+  install -Dm644 update.conf -t "$pkgdir/etc/nexusos"
 }

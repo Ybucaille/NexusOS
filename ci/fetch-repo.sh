@@ -3,8 +3,9 @@
 # local build, so the ISO is made from what machines will install.
 #
 # Every signature is checked against the key committed in pkgs/nexusos-keyring,
-# not against the keyring package of the release itself. Only the packages the
-# database lists are fetched: the release may still hold older builds.
+# not against the keyring package of the release itself, and the database
+# against the signed nexusos-release file. Only the packages the database lists
+# are fetched: the release may still hold older builds.
 #
 # Usage: ci/fetch-repo.sh [YYYY/MM/DD]   (defaults to yesterday, UTC)
 set -euo pipefail
@@ -23,9 +24,14 @@ trap 'rm -rf "$tmp"' EXIT
 gpg --dearmor < "$key" > "$tmp/key.gpg"
 verify() { gpgv --quiet --keyring "$tmp/key.gpg" "$1.sig" "$1" 2>/dev/null || { echo "bad signature: $(basename "$1")" >&2; exit 1; }; }
 
-gh release download "$tag" -D "$tmp/repo" -p 'nexusos.db*' -p 'nexusos.files*'
+gh release download "$tag" -D "$tmp/repo" -p 'nexusos.db*' -p 'nexusos.files*' -p 'nexusos-release*'
+verify "$tmp/repo/nexusos-release"
 verify "$tmp/repo/nexusos.db"
 verify "$tmp/repo/nexusos.files"
+# The release names the snapshot and the database it was tested with.
+grep -qx "snapshot=$snapshot" "$tmp/repo/nexusos-release" || { echo "$tag is not for snapshot $snapshot" >&2; exit 1; }
+grep -qx "database=$(sha256sum < "$tmp/repo/nexusos.db" | cut -d' ' -f1)" "$tmp/repo/nexusos-release" ||
+  { echo "the database of $tag is not the one its release file names" >&2; exit 1; }
 
 mapfile -t files < <(tar -xOf "$tmp/repo/nexusos.db" --wildcards '*/desc' | awk '/^%FILENAME%$/ {getline; print}')
 (( ${#files[@]} )) || { echo "empty database in $tag" >&2; exit 1; }

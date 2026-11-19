@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# Move this system to the newest NexusOS release: the nexusos repository and
+# the Arch Linux Archive snapshot it was tested with, always together.
+#
+# The release is checked against the NexusOS key alone (not every key pacman
+# trusts), its database against the signed release file, and no release older
+# than the installed one is taken. The new repository is staged next to the
+# current one, a snapper snapshot is taken when snapper manages /, then the
+# mirrorlist and /var/lib/nexusos/repo switch and pacman upgrades. If pacman
+# fails, both go back as they were.
+#
+# Usage: nexusos-update [--check] [--yes]
+#   --check  only say whether a newer release exists (exit 0 if so, 2 if not)
+#   --yes    do not ask, let pacman answer the defaults
+set -euo pipefail
+
+conf=/etc/nexusos/update.conf
+lib=/var/lib/nexusos
+repo=$lib/repo
+# Present from the switch until pacman is done: an interrupted update still has
+# packages to upgrade although the repository and mirrorlist are new.
+pending=$lib/update-pending
+mirrorlist=/etc/pacman.d/mirrorlist
+key=/usr/share/pacman/keyrings/nexusos.gpg
+
+check=0 yes=0
+for arg; do
+  case $arg in
+    --check) check=1 ;;
+    --yes) yes=1 ;;
+    *) echo "usage: nexusos-update [--check] [--yes]" >&2; exit 64 ;;
+  esac
+done
+
+die() { echo "nexusos-update: $*" >&2; exit 1; }
+(( EUID == 0 )) || die "run as root"
+[[ -f $key ]] || die "no NexusOS key in $key (nexusos-keyring)"
+
+[[ -r $conf ]] || die "cannot read $conf"
+source=$(sed -n 's/^source *= *//p' "$conf" | tail -n1)
+[[ -n $source ]] || die "no source in $conf"
+
+exec 9>/run/nexusos-update.lock
+flock -n 9 || die "another update is running"
+
+# Same file system as the repository, so the switch is a rename.
+tmp=$(mktemp -d "$lib/update.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+export GNUPGHOME=$tmp/gnupg
+mkdir -m 700 "$GNUPGHOME"
+gpg --quiet --dearmor < "$key" > "$tmp/key.gpg"
+
+fetch() { curl -fsSL --retry 3 -o "$tmp/new/$1" "$source/$1" || die "cannot download $source/$1"; }
+verify() { gpgv --quiet --keyring "$tmp/key.gpg" "$tmp/new/$1.sig" "$tmp/new/$1" 2>/dev/null || die "bad signature: $1"; }
+field() { sed -n "s/^$1=//p" "$2" | head -n1; }
+
+mkdir "$tmp/new"
+fetch nexusos-release
+fetch nexusos-release.sig
+verify nexusos-release
+snapshot=$(field snapshot "$tmp/new/nexusos-release")
+database=$(field database "$tmp/new/nexusos-release")
+[[ $snapshot =~ ^[0-9]{4}/[0-9]{2}/[0-9]{2}$ && $database =~ ^[0-9a-f]{64}$ ]] || die "malformed release file"
+
+# The installed release: its file when the ISO carried one, else the
+# mirrorlist and the database themselves.
+if [[ -f $repo/nexusos-release ]]; then
+  current=$(field snapshot "$repo/nexusos-release")
+else
+  current=$(sed -n 's|^Server *= *https://archive.archlinux.org/repos/\([0-9/]*\)/.*|\1|p' "$mirrorlist" | head -n1)
+fi
+current_database=$(sha256sum < "$repo/nexusos.db" | cut -d' ' -f1)
+[[ -n $current ]] || die "cannot tell the installed snapshot from $mirrorlist"
+
+if [[ $snapshot < $current ]]; then
+  die "the source offers $snapshot, older than the installed $current"
+fi
+if [[ -f $pending ]]; then
+  echo "The update to $(cat "$pending") did not finish; resuming."
+elif [[ $snapshot == "$current" && $database == "$current_database" ]]; then
+  echo "NexusOS is up to date (snapshot $current)."
+  exit $(( check ? 2 : 0 ))
+fi
+echo "NexusOS release: snapshot $current -> $snapshot"
+(( !check )) || exit 0
+
+for f in nexusos.db nexusos.db.sig nexusos.files nexusos.files.sig; do fetch "$f"; done
+verify nexusos.db
+verify nexusos.files
+[[ $(sha256sum < "$tmp/new/nexusos.db" | cut -d' ' -f1) == "$database" ]] || die "the database is not the one the release names"
+
+# Every package the database lists, with its checksum: unchanged files are
+# linked from the current repository, the others downloaded and checked.
+while read -r file sum; do
+  [[ $file =~ ^[A-Za-z0-9@._+-]+\.pkg\.tar\.zst$ ]] || die "unexpected package name: $file"
+  if [[ -f $repo/$file && -f $repo/$file.sig ]] && [[ $(sha256sum < "$repo/$file" | cut -d' ' -f1) == "$sum" ]]; then
+    ln "$repo/$file" "$repo/$file.sig" "$tmp/new/"
+  else
+    fetch "$file"
+    fetch "$file.sig"
+    [[ $(sha256sum < "$tmp/new/$file" | cut -d' ' -f1) == "$sum" ]] || die "$file does not match the database"
+  fi
+  verify "$file"
+done < <(tar -xOf "$tmp/new/nexusos.db" --wildcards '*/desc' |
+         awk '/^%FILENAME%$/ {getline; f = $0} /^%SHA256SUM%$/ {getline; print f, $0}')
+
+# repo-add's names, which pacman finds through the links.
+for db in nexusos.db nexusos.files; do
+  for ext in '' .sig; do mv "$tmp/new/$db$ext" "$tmp/new/$db.tar.zst$ext"; ln -s "$db.tar.zst$ext" "$tmp/new/$db$ext"; done
+done
+chmod 755 "$tmp/new"
+cat > "$tmp/mirrorlist" <<END
+# NexusOS follows a dated Arch Linux Archive snapshot.
+Server = https://archive.archlinux.org/repos/$snapshot/\$repo/os/\$arch
+END
+
+if (( !yes )); then
+  read -rp "Upgrade now? [Y/n] " answer
+  [[ ${answer,,} != n* ]] || exit 0
+fi
+
+pre=
+if snapper --no-dbus list-configs 2>/dev/null | grep -q '^root '; then
+  pre=$(snapper --no-dbus -c root create -t pre -p -c number -d "nexusos-update $snapshot")
+  echo "snapper pre snapshot $pre"
+fi
+
+echo "$snapshot" > "$pending"
+cp -a "$mirrorlist" "$tmp/mirrorlist.old"
+mv "$repo" "$tmp/old"
+mv "$tmp/new" "$repo"
+cp "$tmp/mirrorlist" "$mirrorlist"
+
+pacman_args=(-Syu)
+(( !yes )) || pacman_args+=(--noconfirm)
+if ! pacman "${pacman_args[@]}"; then
+  echo "nexusos-update: pacman failed, restoring the previous release" >&2
+  rm -rf "$repo"
+  mv "$tmp/old" "$repo"
+  cp "$tmp/mirrorlist.old" "$mirrorlist"
+  pacman -Sy >/dev/null || true
+  rm -f "$pending"
+  [[ -z $pre ]] || echo "snapper pre snapshot $pre holds the system as it was before" >&2
+  exit 1
+fi
+
+# A signed release is checked as such from now on, whatever the image set
+# (a local build installs unsigned).
+sed -i '/^\[nexusos\]$/,/^\[/ s/^SigLevel *=.*/SigLevel = Required/' /etc/pacman.conf
+[[ -z $pre ]] || snapper --no-dbus -c root create -t post --pre-number "$pre" -c number -d "nexusos-update $snapshot"
+rm -f "$pending"
+echo "NexusOS is now on snapshot $snapshot."

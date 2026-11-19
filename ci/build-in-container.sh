@@ -62,3 +62,13 @@ for pkg in $PACKAGES; do
   rm -f /home/builder/out/*
   pacman -Sy --noconfirm >/dev/null
 done
+
+# The release file ties the database, and through its checksums every package,
+# to the Arch snapshot it was built and tested against. nexusos-update and
+# fetch-repo.sh check its signature, then the database against it.
+cat > /repo/nexusos-release <<END
+snapshot=$SNAPSHOT
+database=$(sha256sum < /repo/nexusos.db.tar.zst | cut -d' ' -f1)
+END
+rm -f /repo/nexusos-release.sig
+[[ -z ${key:-} ]] || gpg --batch --yes --detach-sign -u "$key!" /repo/nexusos-release
