@@ -27,7 +27,9 @@ if [[ -n ${UPDATE:-} ]]; then
   echo "then updating to $UPDATE"
 fi
 
-docker run --rm --device /dev/kvm -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e FIRMWARES="$firmwares" \
+# The guest has 4 GiB. Capped, and the first to go when memory runs short,
+# so a test never takes the desktop down with it.
+docker run --rm --device /dev/kvm --memory "${NEXUSOS_TEST_MEMORY:-6g}" --oom-score-adj 500 -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e FIRMWARES="$firmwares" \
   -e OWNER="$(id -u):$(id -g)" -v "$root/out/iso:/iso" -v "$root/ci:/ci:ro" -v "$cache:/cache:ro" \
   -v "$root/pkgs/nexusos-base/pacman-retry:/usr/local/bin/pacman-retry:ro" \
   "${update[@]}" archlinux:latest bash -euo pipefail -c '

@@ -12,7 +12,9 @@ iso=$(ls -t "$root"/out/iso/nexusos-*.iso 2>/dev/null | head -n1)
 [[ -n $iso ]] || { echo "no ISO in $root/out/iso, run ci/build-iso.sh first" >&2; exit 1; }
 echo "testing $(basename "$iso")"
 
-docker run --rm --device /dev/kvm -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e OWNER="$(id -u):$(id -g)" \
+# The guest has 4 GiB. Capped, and the first to go when memory runs short,
+# so a test never takes the desktop down with it.
+docker run --rm --device /dev/kvm --memory "${NEXUSOS_TEST_MEMORY:-6g}" --oom-score-adj 500 -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e OWNER="$(id -u):$(id -g)" \
   -v "$root/out/iso:/iso" -v "$root/ci:/ci:ro" -v "$root/pkgs/nexusos-base/pacman-retry:/usr/local/bin/pacman-retry:ro" archlinux:latest bash -euo pipefail -c '
 trap "chown -R \$OWNER /iso/test 2>/dev/null || true" EXIT
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
