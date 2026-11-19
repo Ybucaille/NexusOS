@@ -3,10 +3,13 @@
 unattended, then boot the disk and check the installed system. Runs inside the
 container started by test-install.sh.
 
-Usage: test-install.py ISO uefi|bios CACHE OUTDIR
+Usage: test-install.py ISO uefi|bios CACHE OUTDIR [RELEASE]
 
 CACHE is a pacman package cache served to the guest as a CacheServer, so a
-run downloads only what earlier builds did not.
+run downloads only what earlier builds did not. RELEASE, a release directory
+as ci/fetch-repo.sh leaves it, is then served as the update source:
+nexusos-update moves the installed system to it, and the system is checked
+again after a reboot.
 """
 import functools
 import http.server
@@ -22,6 +25,7 @@ import time
 from vm import VM, Checks
 
 iso, firmware, cache, outdir = sys.argv[1:5]
+release = sys.argv[5] if len(sys.argv) > 5 else None
 os.makedirs(outdir, exist_ok=True)
 check = Checks(f"install-{firmware}")
 # QEMU's user network reaches the container at this address.
@@ -75,6 +79,10 @@ for name, data in (("extra.json", extra), ("creds.json", creds)):
     with open(os.path.join(serve, name), "w") as f:
         json.dump(data, f)
 os.symlink(cache, os.path.join(serve, "pkg"))
+if release:
+    os.symlink(release, os.path.join(serve, "update"))
+    with open(os.path.join(release, "nexusos-release")) as f:
+        target = next(line.split("=", 1)[1].strip() for line in f if line.startswith("snapshot="))
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -96,6 +104,35 @@ def repositories(vm):
           repos.replace("\n", " | "))
     status, updates = vm.run("pacman -Sy --noprogressbar >/dev/null && ! pacman -Qu", 300)
     check("repositories sync, nothing to upgrade", status == 0, updates)
+
+
+def started(vm):
+    _, state = vm.run("systemctl is-system-running --wait", 300)
+    _, failed = vm.run("systemctl --failed --no-legend --plain")
+    check("system started", state in ("running", "degraded") and not failed, state + (": " + failed if failed else ""))
+
+
+def desktop(vm, name):
+    """Open the session of the installed user and check the desktop starts.
+
+    Logging in through tuigreet takes a keyboard: greetd opens the session
+    itself instead, as the live medium does. Its run file marks the initial
+    session as done for this boot."""
+    run = vm.run
+    run("cp /etc/greetd/config.toml /root/greetd.toml && printf '\\n[initial_session]\\ncommand = \"/usr/bin/nexusos-session\"\\n"
+        "user = \"tester\"\\n' >> /etc/greetd/config.toml && rm -f /run/greetd.run && systemctl restart greetd")
+    status, _ = run("for i in $(seq 300); do pgrep -x Hyprland >/dev/null && break; sleep 1; done; pgrep -x Hyprland", 330)
+    check("Hyprland running", status == 0)
+    status, shell = run("for i in $(seq 120); do pgrep -f 'qs .*caelestia' >/dev/null && break; sleep 1; done; pgrep -af 'qs .*caelestia'", 150)
+    check("Caelestia shell running", status == 0, shell)
+    run("cp /root/greetd.toml /etc/greetd/config.toml")
+    _, packages = run("pacman -Q nexusos-base nexusos-desktop nexusos-keyring linux limine snapper 2>/dev/null")
+    print(packages, flush=True)
+    _, errors = run("journalctl -b -p err --no-pager -o cat | tail -n 40")
+    with open(os.path.join(outdir, f"errors-{name}.log"), "w") as f:
+        f.write(errors + "\n")
+    time.sleep(10)
+    print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'desktop-{name}.png'))}", flush=True)
 
 
 # First boot: the live medium installs onto the disk.
@@ -136,9 +173,7 @@ run = vm.run
 try:
     vm.login(password)
     check("boot from disk to a login prompt", True)
-    _, state = run("systemctl is-system-running --wait", 300)
-    _, failed = run("systemctl --failed --no-legend --plain")
-    check("system started", state in ("running", "degraded") and not failed, state + (": " + failed if failed else ""))
+    started(vm)
     status, osid = run(". /etc/os-release && echo $ID")
     check("NexusOS identity", status == 0 and osid == "nexusos", osid)
     status, entries = run("grep -rh '^/' /boot --include limine.conf")
@@ -154,23 +189,31 @@ try:
     time.sleep(5)
     print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'greeter-{firmware}.png'))}", flush=True)
 
-    # Logging in through tuigreet takes a keyboard: greetd opens the session
-    # of the installed user itself instead, as the live medium does. Its run
-    # file marks the initial session as done for this boot.
-    run("cp /etc/greetd/config.toml /root/greetd.toml && printf '\\n[initial_session]\\ncommand = \"/usr/bin/nexusos-session\"\\n"
-        "user = \"tester\"\\n' >> /etc/greetd/config.toml && rm -f /run/greetd.run && systemctl restart greetd")
-    status, _ = run("for i in $(seq 300); do pgrep -x Hyprland >/dev/null && break; sleep 1; done; pgrep -x Hyprland", 330)
-    check("Hyprland running", status == 0)
-    status, shell = run("for i in $(seq 120); do pgrep -f 'qs .*caelestia' >/dev/null && break; sleep 1; done; pgrep -af 'qs .*caelestia'", 150)
-    check("Caelestia shell running", status == 0, shell)
-    run("cp /root/greetd.toml /etc/greetd/config.toml")
-    _, packages = run("pacman -Q nexusos-base nexusos-desktop nexusos-keyring linux limine snapper 2>/dev/null")
-    print(packages, flush=True)
-    _, errors = run("journalctl -b -p err --no-pager -o cat | tail -n 40")
-    with open(os.path.join(outdir, f"errors-installed-{firmware}.log"), "w") as f:
-        f.write(errors + "\n")
-    time.sleep(10)
-    print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'desktop-{firmware}.png'))}", flush=True)
+    desktop(vm, f"installed-{firmware}")
+
+    if release:
+        # The newer release, from the test server in place of the published one.
+        run(f"sed -i 's|^source *=.*|source = {host}/update|' /etc/nexusos/update.conf")
+        start = time.monotonic()
+        status, _ = run("nexusos-update --yes >/root/update.log 2>&1", 1800)
+        _, log = run("tail -n 30 /root/update.log")
+        check(f"nexusos-update to {target}", status == 0 and f"now on snapshot {target}" in log,
+              f"{time.monotonic() - start:.0f}s")
+        print(log, flush=True)
+        vm.send("systemctl reboot\n")
+        vm.login(password)
+        check("reboot after the update", True)
+        started(vm)
+        status, state = run("grep -h '^Server' /etc/pacman.d/mirrorlist; grep -h '^snapshot=' /var/lib/nexusos/repo/nexusos-release;"
+                            " sed -n '/^\\[nexusos\\]$/,/^\\[/ s/^SigLevel.*/&/p' /etc/pacman.conf;"
+                            " test ! -e /var/lib/nexusos/update-pending")
+        check(f"snapshot {target}, signed nexusos repository, nothing pending",
+              status == 0 and f"/repos/{target}/" in state and f"snapshot={target}" in state
+              and "SigLevel = Required" in state, state.replace("\n", " | "))
+        repositories(vm)
+        status, out = run("nexusos-update --check", 120)
+        check("nexusos-update finds nothing newer", status == 2, out)
+        desktop(vm, f"updated-{firmware}")
 except TimeoutError as error:
     check("serial console", False, str(error))
 finally:

@@ -4,8 +4,10 @@
 # throwaway container. Serial logs, errors and screenshots land in
 # out/iso/test/.
 #
-# Usage: ci/test-install.sh [YYYY/MM/DD] [uefi|bios ...]
+# Usage: [UPDATE=YYYY/MM/DD] ci/test-install.sh [YYYY/MM/DD] [uefi|bios ...]
 #   (snapshot for QEMU and OVMF, defaults to yesterday; both firmwares by default)
+#   UPDATE: then move the installed system to the release in out/repo/<date>
+#   (ci/fetch-repo.sh) with nexusos-update, reboot and check it again.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -17,14 +19,21 @@ iso=$(ls -t "$root"/out/iso/nexusos-*.iso 2>/dev/null | head -n1)
 cache="$root/out/cache/pacman"
 mkdir -p "$cache"
 echo "installing $(basename "$iso")"
+update=()
+if [[ -n ${UPDATE:-} ]]; then
+  release="$root/out/repo/${UPDATE//\//-}"
+  [[ -f $release/nexusos-release ]] || { echo "no release in $release, run ci/fetch-repo.sh $UPDATE first" >&2; exit 1; }
+  update=(-v "$release:/update:ro")
+  echo "then updating to $UPDATE"
+fi
 
 docker run --rm --device /dev/kvm -e SNAPSHOT="$snapshot" -e ISO="$(basename "$iso")" -e FIRMWARES="$firmwares" \
   -e OWNER="$(id -u):$(id -g)" -v "$root/out/iso:/iso" -v "$root/ci:/ci:ro" -v "$cache:/cache:ro" \
-  archlinux:latest bash -euo pipefail -c '
+  "${update[@]}" archlinux:latest bash -euo pipefail -c '
 trap "chown -R \$OWNER /iso/test 2>/dev/null || true" EXIT
 echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
 pacman -Syuu --noconfirm --needed qemu-system-x86 qemu-img qemu-hw-display-virtio-vga qemu-hw-display-virtio-gpu edk2-ovmf python openssl >/dev/null
 rc=0
-for firmware in $FIRMWARES; do python /ci/test-install.py "/iso/$ISO" "$firmware" /cache /iso/test || rc=1; done
+for firmware in $FIRMWARES; do python /ci/test-install.py "/iso/$ISO" "$firmware" /cache /iso/test $([[ -d /update ]] && echo /update) || rc=1; done
 exit $rc
 '
