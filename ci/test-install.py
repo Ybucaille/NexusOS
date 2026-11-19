@@ -247,7 +247,8 @@ try:
         check("nexusos-update --check as a user", status == 2, out)
         # A release that brings nexus-shell replaces caelestia-shell.
         if any(n.startswith("nexus-shell-") and n.endswith(".pkg.tar.zst") for n in os.listdir(release)):
-            status, out = run("pacman -Q nexus-shell && ! pacman -Q caelestia-shell")
+            # By name: pacman -Q also answers for what a package provides.
+            status, out = run("pacman -Q nexus-shell && ! pacman -Qq | grep -qx caelestia-shell")
             check("nexus-shell replaces caelestia-shell", status == 0, out)
         desktop(vm, f"updated-{firmware}")
 
