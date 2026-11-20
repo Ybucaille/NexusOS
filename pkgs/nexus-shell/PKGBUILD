@@ -6,9 +6,9 @@
 # The native plugin links against Qt and Quickshell: rebuild it with them.
 
 pkgname=nexus-shell
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
-_commit=7a1df1290dfe5bc13c657bf60c1d860759fbc1e2
+_commit=5808dc471a6db31cdd1201487d2889e79b76cbd6
 pkgdesc='The NexusOS desktop shell'
 arch=(x86_64)
 url='https://github.com/Ybucaille/nexus-shell'
