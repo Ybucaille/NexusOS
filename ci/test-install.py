@@ -349,17 +349,19 @@ try:
                      for key in ("f", "o", "o", "t", "ret")))
             _, app = run("for i in $(seq 30); do pgrep -nu tester '^foot' && break; sleep 1; done")
             _, shell = run("pgrep -of 'qs .*caelestia'")
-            _, cgroups = run(f"cat /proc/{app or 0}/cgroup /proc/{shell or 0}/cgroup")
-            unit = cgroups.split("\n")[-1].rsplit("/", 1)[-1]
-            # As the session would: its user unit when the shell has one, else the process alone.
-            if unit.endswith(".service"):
+            _, cgroups = run(f"cat /proc/{app or 0}/cgroup /proc/{shell or 0}/cgroup /proc/$(pgrep -xo Hyprland)/cgroup")
+            app_cg, shell_cg, wm_cg = (cgroups.split("\n") + ["", "", ""])[:3]
+            unit = shell_cg.rsplit("/", 1)[-1]
+            # As the session would: the user unit of the shell when it has its own,
+            # else the process alone (in the unit of Hyprland, restarting it ends the session).
+            if unit.endswith(".service") and shell_cg != wm_cg:
                 run(f"systemctl --user -M tester@ restart {unit}")
             else:
                 run(f"kill {shell or 0}")
             time.sleep(5)
             status, _ = run(f"kill -0 {app or 0}")
             check("an app started from the launcher outlives a restart of the shell",
-                  bool(app) and status == 0, cgroups.replace("\n", " | "))
+                  bool(app) and status == 0, f"app {app_cg} | shell {shell_cg} | Hyprland {wm_cg}")
             print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'launcher-{firmware}.png'))}", flush=True)
 
         status, _ = run("lsinitcpio /boot/initramfs-linux.img | grep -q 'hooks/nexusos-snapshot$'")
