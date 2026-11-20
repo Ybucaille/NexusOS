@@ -1,0 +1,10 @@
+[Unit]
+Description=List the snapshots of / for the desktop shell
+# Written again at every boot, also from a snapshot booted read-only (its root
+# is an overlay in memory), so that the "current" line is right.
+ConditionPathIsDirectory=/.snapshots
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nexusos/boot-snapshots list

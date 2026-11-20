@@ -1,12 +1,13 @@
-# NexusOS base system: identity (os-release, logo), nexusos-update, boot
-# entries for snapper snapshots and nexusos-rollback.
+# NexusOS base system: identity (os-release, logo), nexusos-update (and its
+# channel), boot entries for snapper snapshots, their list for the desktop shell
+# and nexusos-rollback.
 # filesystem keeps owning /usr/lib/os-release; a pacman hook writes NexusOS's
 # over it after every filesystem upgrade, as Arch derivatives do rather than
 # forking filesystem.
 
 pkgname=nexusos-base
-pkgver=0.6.0
-pkgrel=2
+pkgver=0.7.0
+pkgrel=1
 pkgdesc='NexusOS base system: identity (os-release, logo), updates, snapshot boot entries and rollback'
 arch=(any)
 url='https://github.com/Ybucaille/NexusOS'
@@ -16,12 +17,12 @@ optdepends=('snapper: a snapshot before and after each update'
             'limine: boot entries for the snapshots'
             'mkinitcpio: booting a read-only snapshot'
             'btrfs-progs: going back to a snapshot for good (nexusos-rollback)'
-            'polkit: updates from the desktop shell (pkexec)')
+            'polkit: updates and rollback from the desktop shell (pkexec)')
 backup=(etc/nexusos/update.conf etc/mkinitcpio.conf.d/nexusos.conf)
 source=(os-release nexusos-logo.svg nexusos-os-release.hook nexusos-update pacman-retry update.conf
         boot-snapshots snapper-plugin initcpio-install initcpio-hook mkinitcpio.conf
-        org.nexusos.update.policy nexusos-rollback)
-sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
+        org.nexusos.update.policy nexusos-rollback org.nexusos.rollback.policy nexusos-snapshots.service)
+sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
 
 package() {
   install -Dm644 os-release -t "$pkgdir/usr/share/nexusos"
@@ -31,8 +32,13 @@ package() {
   install -Dm755 nexusos-update nexusos-rollback -t "$pkgdir/usr/bin"
   install -Dm755 pacman-retry -t "$pkgdir/usr/lib/nexusos"
   install -Dm644 update.conf -t "$pkgdir/etc/nexusos"
-  install -Dm644 org.nexusos.update.policy -t "$pkgdir/usr/share/polkit-1/actions"
+  install -Dm644 org.nexusos.update.policy org.nexusos.rollback.policy -t "$pkgdir/usr/share/polkit-1/actions"
   install -Dm755 boot-snapshots -t "$pkgdir/usr/lib/nexusos"
+  install -Dm644 nexusos-snapshots.service -t "$pkgdir/usr/lib/systemd/system"
+  # Enabled by the package, as some Arch packages do: the unit only runs where
+  # /.snapshots exists.
+  install -dm755 "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../nexusos-snapshots.service "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/nexusos-snapshots.service"
   # snapper runs its plugins in name order; the name must start with a digit.
   install -Dm755 snapper-plugin "$pkgdir/usr/lib/snapper/plugins/50-nexusos-boot"
   install -Dm644 initcpio-install "$pkgdir/usr/lib/initcpio/install/nexusos-snapshot"

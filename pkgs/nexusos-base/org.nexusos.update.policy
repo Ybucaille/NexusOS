@@ -2,7 +2,8 @@
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <!-- pkexec nexusos-update, as the desktop shell runs it: an administrator
-     password once, kept for a few minutes. the check alone needs none. -->
+     password once, kept for a few minutes. the check alone needs none.
+     The same action covers pkexec nexusos-update with the channel option (same exec.path). -->
 <policyconfig>
   <vendor>NexusOS</vendor>
   <vendor_url>https://github.com/Ybucaille/NexusOS</vendor_url>

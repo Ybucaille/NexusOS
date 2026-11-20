@@ -12,11 +12,19 @@
 # entry uses. A snapshot boots read-only, its changes kept in memory (the
 # nexusos-snapshot mkinitcpio hook).
 #
-# Usage: boot-snapshots record NUMBER | update
+# "list" writes /var/lib/nexusos/snapshots, readable by everyone, so the desktop
+# shell can offer the snapshots without root. "record" and "update" end with it,
+# and nexusos-snapshots.service at every boot, which also tells which snapshot
+# the system runs from ("current"). Tab separated, after a comment line:
+#   current N                                   N from nexusos.snapshot=, or 0
+#   N  date (UTC)  type  boot (yes/no)  description   newest first
+#
+# Usage: boot-snapshots record NUMBER | update | list
 set -euo pipefail
 
 snapshots=/.snapshots
 store=/boot/nexusos
+lib=/var/lib/nexusos
 keep_pre=5 keep_other=1
 begin='# >>> NexusOS snapshots, written by /usr/lib/nexusos/boot-snapshots'
 end='# <<< NexusOS snapshots'
@@ -120,9 +128,54 @@ update() {
   done
 }
 
+# The snapshots as a file anyone can read. It does not depend on limine.conf.
+list() {
+  local snapshots=$snapshots cmdline current arg d type boot conf desc date top= device subvol out=$lib/snapshots
+  cmdline=$(< /proc/cmdline)
+  arg() { tr ' ' '\n' <<<"$cmdline" | sed -n "s/^$1=//p" | tail -n1; }
+  current=$(arg nexusos.snapshot)
+  [[ $current =~ ^[0-9]+$ ]] || current=0
+  # In a booted snapshot /.snapshots is an empty directory (a nested subvolume
+  # is not part of the snapshot): read it from the root subvolume by name, as
+  # nexusos-rollback does.
+  if (( current )) && ! compgen -G "$snapshots/[0-9]*/info.xml" >/dev/null; then
+    subvol=$(arg rootflags | tr ',' '\n' | sed -n 's/^subvol=//p' | tail -n1)
+    subvol=${subvol#/}
+    subvol=${subvol%%/.snapshots/*}
+    device=$(arg root)
+    device=$(findfs "$device" 2>/dev/null) || true
+    if [[ -n $subvol && -b $device ]] && top=$(mktemp -d /run/nexusos-snapshots.XXXXXX); then
+      trap "umount '$top' 2>/dev/null; rmdir '$top' 2>/dev/null" EXIT
+      mount -o ro,subvol="$subvol/.snapshots" "$device" "$top" 2>/dev/null && snapshots=$top || true
+    fi
+  fi
+  conf=$(find /boot -name limine.conf -print -quit 2>/dev/null)
+
+  mkdir -p "$lib" || return 1
+  {
+    printf '# Snapshots of /, written by boot-snapshots: number, date (UTC), type, boot entry, description\n'
+    printf 'current\t%s\n' "$current"
+    for d in $(ls -d "$snapshots"/[0-9]*/ 2>/dev/null | sed 's|.*/\([0-9]*\)/$|\1|' | sort -rn); do
+      [[ $d != 0 && -f $snapshots/$d/info.xml ]] || continue
+      type=$(field type "$d")
+      boot=no
+      [[ -z $conf ]] || ! grep -Eq "nexusos\.snapshot=$d( |\$)" "$conf" || boot=yes
+      desc=$(field description "$d")
+      date=$(field date "$d")
+      printf '%s\t%s\t%s\t%s\t%s\n' "$d" "${date//[$'\t\n\r']/ }" "$type" "$boot" "${desc//[$'\t\n\r']/ }"
+    done
+  } > "$out.new" || return 1
+  chmod 644 "$out.new" && mv "$out.new" "$out" || return 1
+  if [[ -n $top ]] && umount "$top" 2>/dev/null; then rmdir "$top"; fi
+}
+
+# A snapshot taken or deleted must not fail because of the list.
+list_or_warn() { list || echo "boot-snapshots: cannot write $lib/snapshots" >&2; }
+
 (( EUID == 0 )) || die "run as root"
 case ${1:-} in
-  record) [[ ${2:-} =~ ^[0-9]+$ ]] || die "usage: boot-snapshots record NUMBER"; record "$2"; update ;;
-  update) update ;;
-  *) die "usage: boot-snapshots record NUMBER | update" ;;
+  record) [[ ${2:-} =~ ^[0-9]+$ ]] || die "usage: boot-snapshots record NUMBER | update | list"; record "$2"; update; list_or_warn ;;
+  update) update; list_or_warn ;;
+  list) list ;;
+  *) die "usage: boot-snapshots record NUMBER | update | list" ;;
 esac

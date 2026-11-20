@@ -12,9 +12,13 @@
 # fails, both go back as they were.
 #
 # Usage: nexusos-update [--check] [--yes]
-#   --check  only say whether a newer release exists (exit 0 if so, 2 if not);
-#            needs no root, so the desktop shell asks without a password
-#   --yes    do not ask, let pacman answer the defaults
+#        nexusos-update --channel [stable|testing]
+#   --check    only say whether a newer release exists (exit 0 if so, 2 if not);
+#              needs no root, so the desktop shell asks without a password
+#   --yes      do not ask, let pacman answer the defaults
+#   --channel  alone, says the channel of the source (no root); with a name,
+#              moves the source of update.conf to that channel (root) and
+#              updates nothing. Not combined with --check or --yes.
 set -euo pipefail
 
 conf=/etc/nexusos/update.conf
@@ -26,16 +30,51 @@ pending=$lib/update-pending
 mirrorlist=/etc/pacman.d/mirrorlist
 key=/usr/share/pacman/keyrings/nexusos.gpg
 
-check=0 yes=0
-for arg; do
-  case $arg in
+usage="usage: nexusos-update [--check] [--yes] | --channel [stable|testing]"
+check=0 yes=0 channel=0 name=
+while (( $# )); do
+  case $1 in
     --check) check=1 ;;
     --yes) yes=1 ;;
-    *) echo "usage: nexusos-update [--check] [--yes]" >&2; exit 64 ;;
+    --channel)
+      channel=1
+      # The name, when there is one, is the next argument.
+      if [[ ${2:-} != "" && $2 != --* ]]; then name=$2; shift; fi ;;
+    *) echo "$usage" >&2; exit 64 ;;
   esac
+  shift
 done
+if (( channel && (check || yes) )) || [[ -n $name && $name != stable && $name != testing ]]; then
+  echo "$usage" >&2
+  exit 64
+fi
 
 die() { echo "nexusos-update: $*" >&2; exit 1; }
+
+if (( channel )); then
+  [[ -r $conf ]] || die "cannot read $conf"
+  # The active source is the last one, as below.
+  line=$(grep -n '^source *=' "$conf" | tail -n1 | cut -d: -f1)
+  [[ -n $line ]] || die "no source in $conf"
+  url=$(sed -n 's/^source *= *//p' "$conf" | tail -n1)
+  url=${url%/}
+  current=${url##*/}
+  if [[ $current != stable && $current != testing ]]; then
+    [[ -z $name ]] || die "the source $url is not a NexusOS channel, edit $conf by hand"
+    echo "custom $url"
+    exit 0
+  fi
+  if [[ -n $name ]]; then
+    (( EUID == 0 )) || die "run as root"
+    # Same owner and mode, comments and other lines as they were.
+    cp -p "$conf" "$conf.new"
+    NEW=${url%/*}/$name awk -v n="$line" 'NR == n {match($0, /^source *= */); print substr($0, 1, RLENGTH) ENVIRON["NEW"]; next} {print}' "$conf" > "$conf.new"
+    mv "$conf.new" "$conf"
+    current=$name
+  fi
+  echo "$current"
+  exit 0
+fi
 (( check || EUID == 0 )) || die "run as root"
 [[ -f $key ]] || die "no NexusOS key in $key (nexusos-keyring)"
 
@@ -129,6 +168,8 @@ if (( !yes )); then
 fi
 
 pre=
+# The description "nexusos-update YYYY/MM/DD" (the snapshot moved to) stays as
+# it is: the desktop shell reads it from the snapshot list.
 if snapper --no-dbus list-configs 2>/dev/null | grep -q '^root '; then
   pre=$(snapper --no-dbus -c root create -t pre -p -c number -d "nexusos-update $snapshot")
   echo "snapper pre snapshot $pre"

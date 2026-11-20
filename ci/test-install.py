@@ -82,7 +82,9 @@ for name, data in (("extra.json", extra), ("creds.json", creds)):
         json.dump(data, f)
 os.symlink(cache, os.path.join(serve, "pkg"))
 if release:
-    os.symlink(release, os.path.join(serve, "update"))
+    # Both channels, so that the source is a channel whatever the test picks.
+    for channel in ("stable", "testing"):
+        os.symlink(release, os.path.join(serve, channel))
     with open(os.path.join(release, "nexusos-release")) as f:
         target = next(line.split("=", 1)[1].strip() for line in f if line.startswith("snapshot="))
 
@@ -106,6 +108,18 @@ def repositories(vm):
           repos.replace("\n", " | "))
     status, updates = vm.run("pacman -Sy --noprogressbar >/dev/null && ! pacman -Qu", 300)
     check("repositories sync, nothing to upgrade", status == 0, updates)
+
+
+def base_since(vm, version):
+    """Whether the nexusos-base installed (in the booted system) is this version or newer."""
+    status, _ = vm.run(f"test \"$(vercmp \"$(pacman -Q nexusos-base | cut -d' ' -f2)\" {version})\" -ge 0")
+    return status == 0
+
+
+def snapshot_list(vm):
+    """/var/lib/nexusos/snapshots as the user tester reads it: its lines, split at the tabs."""
+    status, out = vm.run("runuser -u tester -- cat /var/lib/nexusos/snapshots")
+    return status, [line.split("\t") for line in out.split("\n")]
 
 
 def started(vm):
@@ -216,7 +230,7 @@ try:
 
     if release:
         # The newer release, from the test server in place of the published one.
-        run(f"sed -i 's|^source *=.*|source = {host}/update|' /etc/nexusos/update.conf")
+        run(f"sed -i 's|^source *=.*|source = {host}/stable|' /etc/nexusos/update.conf")
         _, before = run("sed -n 's/^snapshot=//p' /var/lib/nexusos/repo/nexusos-release")
         # A system older than boot-snapshots gets it with this very update,
         # after its pre snapshot: no menu entry for that one.
@@ -245,6 +259,27 @@ try:
         # As the desktop shell asks, without root.
         status, out = run("runuser -u tester -- nexusos-update --check", 120)
         check("nexusos-update --check as a user", status == 2, out)
+        if base_since(vm, "0.7.0"):
+            # What the desktop shell reads without root.
+            status, rows = snapshot_list(vm)
+            pair = [r for r in rows if len(r) == 5 and r[3] in ("yes", "no") and r[4] == f"nexusos-update {target}"]
+            check("snapshot list readable by a user: current 0, the pre and post of the update",
+                  status == 0 and ["current", "0"] in rows and sorted(r[2] for r in pair) == ["post", "pre"]
+                  and (entries != 0 or next(r for r in pair if r[2] == "pre")[3] == "yes"),
+                  " | ".join("/".join(r) for r in rows))
+            status, out = run("runuser -u tester -- nexusos-update --channel")
+            check("nexusos-update --channel as a user", status == 0 and out == "stable", out)
+            status, out = run("pkaction --action-id org.nexusos.rollback --verbose")
+            check("polkit action org.nexusos.rollback asks an administrator",
+                  status == 0 and re.search(r"implicit active:\s+auth_admin$", out, re.M) is not None
+                  and re.search(r"implicit any:\s+no$", out, re.M) is not None, out.split("\n")[0])
+            # Moving the source, from root; the other lines of update.conf stay.
+            status, out = run("nexusos-update --channel testing; grep -c '^# ' /etc/nexusos/update.conf; grep '^source' /etc/nexusos/update.conf")
+            check("nexusos-update --channel testing", status == 0 and out.split("\n")[0] == "testing"
+                  and out.endswith("/testing") and out.split("\n")[1] != "0", out.replace("\n", " | "))
+            status, out = run("nexusos-update --channel stable; nexusos-update --channel; grep '^source' /etc/nexusos/update.conf")
+            check("nexusos-update --channel stable puts it back", status == 0 and out.split("\n")[:2] == ["stable", "stable"]
+                  and out.endswith("/stable"), out.replace("\n", " | "))
         # A release that brings nexus-shell replaces caelestia-shell.
         if any(n.startswith("nexus-shell-") and n.endswith(".pkg.tar.zst") for n in os.listdir(release)):
             # By name: pacman -Q also answers for what a package provides.
@@ -282,6 +317,11 @@ try:
                                     " sed -n 's/^snapshot=//p' /var/lib/nexusos/repo/nexusos-release")
                 check(f"booted snapshot {pre}: overlay root, snapshot {before} as before the update",
                       state.split("\n") == [f"nexusos.snapshot={pre}", "overlay", before], state.replace("\n", " | "))
+                if base_since(vm, "0.7.0"):
+                    # The service lists again at this boot: a system older than that has none.
+                    status, rows = snapshot_list(vm)
+                    check(f"booted snapshot {pre}: the snapshot list says it is the current one",
+                          status == 0 and ["current", pre] in rows, " | ".join("/".join(r) for r in rows))
                 desktop(vm, f"snapshot-{firmware}")
                 # On /boot: the snapshot has no copy made after it was taken.
                 run(f"mv {conf}.orig {conf}")
