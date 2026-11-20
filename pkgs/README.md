@@ -30,7 +30,8 @@ The dots and the packages their components need, validated at dots revision
 | `papirus-folders` | 1.14.0 | release tarball instead of the signed git tag |
 | `pwvucontrol` | 0.5.3 | none |
 | `nexusos-base` | 0.4.0 | NexusOS: identity (os-release, logo), `nexusos-update`, snapshot boot entries |
-| `nexusos-desktop` | 0.1.0 | NexusOS: session, dots deployment, desktop dependencies |
+| `nexusos-desktop` | 0.2.0 | NexusOS: session, dots deployment, desktop dependencies |
+| `nexusos-secrets` | 0.1.0 | NexusOS: the password vault (see Secrets) |
 | `nexusos-keyring` | key date | NexusOS: repository signing key (see Signing) |
 
 Newer upstream versions enter through the `testing` channel only.
@@ -54,6 +55,35 @@ Login goes through greetd with tuigreet on the TTY, instead of a second
 compositor for the greeter.
 
 `ci/test-dots.sh` checks first install, fast path and update in a container.
+
+## Secrets
+
+`nexusos-secrets` makes KeePassXC the Secret Service, in place of
+gnome-keyring (it conflicts with it: both own
+`org.freedesktop.secrets.service`). The installer asks whether to install it
+(yes by default); without it the system gets gnome-keyring, and the profile
+adds it whenever a configuration leaves neither of the two.
+
+- `/etc/xdg/autostart/nexusos-keepassxc.desktop` starts KeePassXC at login
+  (uwsm starts the XDG autostart entries), not minimized: its window asks for
+  the master password once per session, or offers to create a database on
+  the first login, then it goes to the tray. The D-Bus service file starts
+  it too when an application asks for secrets first.
+- `/usr/share/nexusos/secrets/keepassxc.ini` holds the defaults (Secret Service
+  and browser integration, tray, closing minimizes, clipboard cleared after
+  10 s, lock on screen lock). `nexusos-session` copies it to
+  `~/.config/keepassxc/` when the user has no `keepassxc.ini`, never over one.
+- A Firefox policy (`/etc/firefox/policies/policies.json`) installs the
+  KeePassXC-Browser extension, and a system-wide native messaging manifest
+  points it at `keepassxc-proxy`. The one-time "Connect" in the extension
+  stays with the user.
+
+A database exposes its entries as secrets once the user enables Secret Service
+integration for it (Database settings). Systems that update from before
+`nexusos-secrets` keep gnome-keyring, now an orphan dependency;
+`pacman -S nexusos-secrets` switches (pacman offers to remove gnome-keyring).
+The pinned dots still run `gnome-keyring-daemon` at Hyprland start: with the
+vault the binary is absent and the command fails without effect.
 
 ## Identity
 

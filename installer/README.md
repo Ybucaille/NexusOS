@@ -10,14 +10,21 @@ sudo nexusos-install
 
 | File | Role |
 |---|---|
-| `nexusos-install` | runs archinstall with `config.json` (in `/usr/local/bin` on the ISO) |
+| `nexusos-install` | asks about the password vault, then runs archinstall with `config.json` (in `/usr/local/bin` on the ISO) |
 | `config.json` | defaults: Limine, `linux`, NetworkManager, zram, hostname `nexusos`, profile Desktop › NexusOS |
-| `nexusos.py` | the NexusOS profile: `nexusos-desktop` and its keyring, greetd, the repository copy |
+| `nexusos.py` | the NexusOS profile: `nexusos-desktop` and its keyring, greetd, the repository copy, a Secret Service when the configuration left none |
 
 The menus still ask for the disk, users and passwords, locale, keyboard,
 timezone and graphics driver. The recommended disk layout is archinstall's
 default with Btrfs, its subvolumes and snapper. On the owner's laptop, pick
 the NVIDIA open kernel module.
+
+Before archinstall starts, `nexusos-install` asks `Password vault (KeePassXC)?
+[Y/n]`: yes (the default) adds `nexusos-secrets` (KeePassXC as the Secret
+Service, with the Firefox extension), no adds `gnome-keyring`. The question is
+skipped when the caller passes `--config` or `--silent`: a configuration
+chooses through its own `packages` list, and the profile installs
+`gnome-keyring` if it names neither.
 
 Limine goes to the removable path (`EFI/BOOT/BOOTX64.EFI`), so the firmware
 boot menu shows the disk, not an entry named after Arch; the profile renames
@@ -50,7 +57,8 @@ ci/test-install.sh 2026/11/18 uefi     # one firmware
 
 The test boots the newest ISO next to a blank 40 GB disk, runs
 `nexusos-install --silent` with the shipped defaults plus a disk layout and
-throwaway credentials, then boots the disk alone. It checks the boot menu, the
+throwaway credentials (the UEFI run with the vault, the BIOS run with
+gnome-keyring, as the two answers of the question would), then boots the disk alone. It checks the boot menu, the
 Btrfs root subvolume, snapper for `/` and `/home`, the identity, the package
 sources (synced, nothing to upgrade), greetd with tuigreet, then has greetd
 open the test user's session and checks Hyprland and the Caelestia shell. Logs

@@ -3,4 +3,10 @@
 # POSIX sh: the dots engine (Python) only starts on a user's first login.
 state="${XDG_STATE_HOME:-$HOME/.local/state}/caelestia/dots-state.json"
 [ -f "$state" ] || /usr/lib/nexusos/dots install
+# Password vault (nexusos-secrets): its defaults once, never over the user's.
+vault=/usr/share/nexusos/secrets/keepassxc.ini
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/keepassxc"
+if [ -f "$vault" ] && [ ! -f "$conf/keepassxc.ini" ]; then
+    mkdir -p "$conf" && cp "$vault" "$conf/keepassxc.ini" && chmod 600 "$conf/keepassxc.ini"
+fi
 exec uwsm start -e -D Hyprland hyprland.desktop

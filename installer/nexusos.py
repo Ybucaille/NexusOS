@@ -46,6 +46,12 @@ class NexusOSProfile(Profile):
 
     @override
     def post_install(self, install_session: 'Installer') -> None:
+        # Runs after the additional packages (guided install: profile.install,
+        # packages, then this): a system never ends up without a Secret Service,
+        # whatever the configuration asked for.
+        local = install_session.target / 'var/lib/pacman/local'
+        if not any(next(local.glob(f'{name}-[0-9]*'), None) for name in ('keepassxc', 'gnome-keyring')):
+            install_session.add_additional_packages(['gnome-keyring'])
         # A derivative must not present itself as Arch Linux in the boot menu.
         for conf in (install_session.target / 'boot').rglob('limine.conf'):
             conf.write_text(conf.read_text().replace('/Arch Linux (', '/NexusOS ('))

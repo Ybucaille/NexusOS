@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=KeePassXC
+Comment=Password vault and Secret Service, unlocked once per session
+Exec=keepassxc
+Icon=keepassxc
+Terminal=false

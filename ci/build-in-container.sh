@@ -44,8 +44,9 @@ useradd -m builder
 echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman, /usr/local/bin/pacman-retry' > /etc/sudoers.d/builder
 
 # Packages that only copy files: their runtime dependencies are not needed to
-# build them, and nexusos-desktop's would pull the whole desktop in.
-nodeps=" caelestia-dots nexusos-desktop "
+# build them, and nexusos-desktop's would pull the whole desktop in (and
+# nexusos-secrets's, Qt).
+nodeps=" caelestia-dots nexusos-desktop nexusos-secrets "
 
 # The build key of a package changes when its recipe does, or when anything it
 # depends on does: Qt, Python and the like have no stable ABI for what is built

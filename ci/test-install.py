@@ -33,6 +33,10 @@ check = Checks(f"install-{firmware}")
 # QEMU's user network reaches the container at this address.
 host = "http://10.0.2.2:8080"
 
+# Whether the ISO carries nexusos-secrets (set once the live medium is up): an
+# update test starts from an older ISO that does not, and skips the vault checks.
+has_secrets = False
+
 disk = f"/tmp/disk-{firmware}.qcow2"
 subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", disk, "40G"], check=True)
 drive = ["-drive", f"file={disk},if=virtio,format=qcow2"]
@@ -153,6 +157,40 @@ def snapshot_list(vm):
     return status, [line.split("\t") for line in out.split("\n")]
 
 
+def secrets(vm):
+    """The password vault of a fresh install: KeePassXC on UEFI (the installer's
+    default answer), gnome-keyring on BIOS (its other answer)."""
+    run = vm.run
+    home = "/home/tester"
+    # The user's session bus. gdbus, not busctl: sd-bus refuses the user bus
+    # under runuser.
+    bus = ("runuser -u tester -- env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u tester)/bus"
+           " gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus"
+           " --method org.freedesktop.DBus.GetConnectionUnixProcessID org.freedesktop.secrets")
+    if firmware == "uefi":
+        status, pkgs = run("pacman -Qq keepassxc nexusos-secrets && ! pacman -Qq gnome-keyring")
+        check("keepassxc and nexusos-secrets installed, gnome-keyring not", status == 0, pkgs.replace("\n", " "))
+        # KeePassXC may rewrite its file: every line of the shipped one must stay.
+        status, out = run(f"grep -vE '^(#|\\[|$)' /usr/share/nexusos/secrets/keepassxc.ini"
+                          f" | while read -r line; do grep -qxF \"$line\" {home}/.config/keepassxc/keepassxc.ini || echo \"$line\"; done")
+        check("keepassxc.ini copied to the user's config, with the shipped keys", status == 0 and out == "", out)
+        status, proc = run("for i in $(seq 60); do pgrep -u tester -x keepassxc >/dev/null && break; sleep 1; done; pgrep -u tester -ax keepassxc", 90)
+        check("keepassxc running for the user", status == 0, proc)
+        # It claims the name at start, before any database is open.
+        status, owner = run(f"for i in $(seq 30); do {bus} >/dev/null 2>&1 && break; sleep 1; done;"
+                            f" pid=$({bus} | awk '{{print $2 + 0}}'); cat /proc/$pid/comm", 60)
+        check("org.freedesktop.secrets owned by keepassxc on the session bus",
+              status == 0 and owner == "keepassxc", owner.replace("\n", " | "))
+        status, out = run("python -m json.tool /etc/firefox/policies/policies.json"
+                          " && python -m json.tool /usr/lib/mozilla/native-messaging-hosts/org.keepassxc.keepassxc_browser.json")
+        check("Firefox policy and native messaging manifest are valid JSON", status == 0, out.split("\n")[0])
+    else:
+        status, pkgs = run("pacman -Qq gnome-keyring && ! pacman -Qq keepassxc nexusos-secrets 2>/dev/null")
+        check("gnome-keyring installed, keepassxc not", status == 0, pkgs.replace("\n", " "))
+        status, out = run(f"ls -A {home}/.config/keepassxc 2>&1")
+        check("no keepassxc config in the home", status != 0 or out == "", out)
+
+
 def started(vm):
     _, state = vm.run("systemctl is-system-running --wait", 300)
     _, failed = vm.run("systemctl --failed --no-legend --plain")
@@ -187,6 +225,7 @@ def install(last):
     did, or None when a download from the archive failed and another try may
     pass: archinstall stops at the first failed pacstrap when unattended (its
     menus would offer to try again)."""
+    global has_secrets
     vm = VM(f"live-{firmware}", firmware, drive + ["-cdrom", iso, "-boot", "d"],
             os.path.join(outdir, f"install-{firmware}.log"))
     try:
@@ -195,9 +234,15 @@ def install(last):
         status, _ = vm.run(f"curl -sfO {host}/extra.json && curl -sfO {host}/creds.json"
                            f" && sed -i '1i CacheServer = {host}/pkg' /etc/pacman.d/mirrorlist")
         check("test files fetched", status == 0)
+        # The vault is the test's choice, as the question of nexusos-install would
+        # be: KeePassXC on UEFI, gnome-keyring on BIOS (an older ISO has neither
+        # to choose from: gnome-keyring comes with its nexusos-desktop).
+        has_secrets = vm.run("ls /var/lib/nexusos/repo/nexusos-secrets-*.pkg.tar.zst")[0] == 0
+        vault = ("nexusos-secrets" if firmware == "uefi" else "gnome-keyring") if has_secrets else ""
         # The shipped defaults, with the disk and the cache cleanup on top.
         vm.run("""python -c 'import json; c = json.load(open("/usr/share/nexusos/installer/config.json"));"""
-               """ c.update(json.load(open("extra.json"))); json.dump(c, open("test.json", "w"))'""")
+               """ c.update(json.load(open("extra.json"))); c["packages"] = [p for p in ["%s"] if p];"""
+               """ json.dump(c, open("test.json", "w"))'""" % vault)
         start = time.monotonic()
         status, _ = vm.run("nexusos-install --config test.json --creds creds.json --silent >/dev/null 2>&1", 5400)
         _, log = vm.run("tail -n 40 /var/log/archinstall/install.log")
@@ -258,6 +303,8 @@ try:
     print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'greeter-{firmware}.png'))}", flush=True)
 
     desktop(vm, f"installed-{firmware}")
+    if has_secrets:
+        secrets(vm)
 
     if release:
         # The newer release, from the test server in place of the published one.

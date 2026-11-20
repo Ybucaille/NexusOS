@@ -2,4 +2,25 @@
 # Install NexusOS from the live medium: archinstall's menus with the NexusOS
 # profile and defaults; the disk, users, locale and graphics driver are asked.
 # Extra arguments go to archinstall (--creds, --silent for an unattended run).
-exec archinstall --config /usr/share/nexusos/installer/config.json --skip-version-check "$@"
+config=/usr/share/nexusos/installer/config.json
+ask=1
+for arg in "$@"; do
+    case $arg in
+        --config | --config=* | --silent) ask=0 ;;
+    esac
+done
+# A caller with its own --config, or an unattended run, decides for itself.
+if [ "$ask" = 1 ]; then
+    printf 'Password vault (KeePassXC)? [Y/n] '
+    read -r answer || answer=
+    case $answer in
+        [nN]*) vault=gnome-keyring ;;
+        *) vault=nexusos-secrets ;;
+    esac
+    tmp=$(mktemp) || exit 1
+    # The Secret Service is a package of the installed system: add it to the defaults.
+    python -c 'import json, sys; c = json.load(open(sys.argv[1])); c["packages"] = c.get("packages", []) + [sys.argv[2]]; json.dump(c, sys.stdout)' \
+        "$config" "$vault" >"$tmp" || exit 1
+    config=$tmp
+fi
+exec archinstall --config "$config" --skip-version-check "$@"

@@ -1,0 +1,29 @@
+# NexusOS password vault: KeePassXC as the Secret Service, started at login,
+# with the Firefox extension installed and wired to it. Replaces gnome-keyring
+# (nexusos-desktop no longer depends on it); the installer offers it.
+
+pkgname=nexusos-secrets
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='NexusOS password vault: KeePassXC as the Secret Service, with Firefox integration'
+arch=(any)
+url='https://github.com/Ybucaille/NexusOS'
+license=('GPL-3.0-only')
+depends=(keepassxc)
+# Both own org.freedesktop.secrets.service, and two providers would race for
+# the bus name.
+conflicts=(gnome-keyring)
+backup=(etc/firefox/policies/policies.json)
+source=(org.freedesktop.secrets.service nexusos-keepassxc.desktop keepassxc.ini
+        policies.json org.keepassxc.keepassxc_browser.json)
+sha256sums=(SKIP SKIP SKIP SKIP SKIP)
+
+package() {
+  install -Dm644 org.freedesktop.secrets.service -t "$pkgdir/usr/share/dbus-1/services"
+  install -Dm644 nexusos-keepassxc.desktop -t "$pkgdir/etc/xdg/autostart"
+  # Copied once into each user's config by nexusos-session; its presence is
+  # also how the session knows the vault is installed.
+  install -Dm644 keepassxc.ini -t "$pkgdir/usr/share/nexusos/secrets"
+  install -Dm644 policies.json -t "$pkgdir/etc/firefox/policies"
+  install -Dm644 org.keepassxc.keepassxc_browser.json -t "$pkgdir/usr/lib/mozilla/native-messaging-hosts"
+}
