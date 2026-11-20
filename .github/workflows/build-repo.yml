@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Yesterday, or the snapshot testing is on when a dispatch moved it
       # further: testing never goes back, and a push must still reach it.
