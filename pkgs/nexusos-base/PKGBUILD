@@ -6,7 +6,7 @@
 # forking filesystem.
 
 pkgname=nexusos-base
-pkgver=0.8.0
+pkgver=0.8.1
 pkgrel=1
 pkgdesc='NexusOS base system: identity (os-release, logo), updates, snapshot boot entries and rollback'
 arch=(any)
