@@ -339,6 +339,29 @@ try:
             ok, out = wait_source(vm, "stable")
             check("desktop shell puts the source back to stable", ok, out)
 
+        if installed_since(vm, "nexus-shell", "0.4.0"):
+            # An app started from the launcher outlives a restart of the shell
+            # (caelestia-dots/shell#1843). No IPC call starts one: the name is
+            # typed into the launcher on the VM keyboard.
+            shell_ipc(vm, "drawers toggle launcher")
+            time.sleep(2)
+            vm.qmp(*({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": key}]}}
+                     for key in ("f", "o", "o", "t", "ret")))
+            _, app = run("for i in $(seq 30); do pgrep -nu tester '^foot' && break; sleep 1; done")
+            _, shell = run("pgrep -of 'qs .*caelestia'")
+            _, cgroups = run(f"cat /proc/{app or 0}/cgroup /proc/{shell or 0}/cgroup")
+            unit = cgroups.split("\n")[-1].rsplit("/", 1)[-1]
+            # As the session would: its user unit when the shell has one, else the process alone.
+            if unit.endswith(".service"):
+                run(f"systemctl --user -M tester@ restart {unit}")
+            else:
+                run(f"kill {shell or 0}")
+            time.sleep(5)
+            status, _ = run(f"kill -0 {app or 0}")
+            check("an app started from the launcher outlives a restart of the shell",
+                  bool(app) and status == 0, cgroups.replace("\n", " | "))
+            print(f"[install-{firmware}] screenshot: {vm.screendump(os.path.join(outdir, f'launcher-{firmware}.png'))}", flush=True)
+
         status, _ = run("lsinitcpio /boot/initramfs-linux.img | grep -q 'hooks/nexusos-snapshot$'")
         check("initramfs carries the nexusos-snapshot hook", status == 0)
         if entries != 0:
