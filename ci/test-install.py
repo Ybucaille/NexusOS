@@ -110,10 +110,39 @@ def repositories(vm):
     check("repositories sync, nothing to upgrade", status == 0, updates)
 
 
+def installed_since(vm, pkg, version):
+    """Whether the package installed (in the booted system) is this version or newer."""
+    status, _ = vm.run(f"test \"$(vercmp \"$(pacman -Q {pkg} | cut -d' ' -f2)\" {version})\" -ge 0")
+    return status == 0
+
+
 def base_since(vm, version):
     """Whether the nexusos-base installed (in the booted system) is this version or newer."""
-    status, _ = vm.run(f"test \"$(vercmp \"$(pacman -Q nexusos-base | cut -d' ' -f2)\" {version})\" -ge 0")
-    return status == 0
+    return installed_since(vm, "nexusos-base", version)
+
+
+def shell_ipc(vm, args, timeout=60):
+    """An IPC call to the desktop shell, from the root console, as the user whose session runs it."""
+    return vm.run("runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/$(id -u tester)"
+                  f" timeout {timeout - 5} qs -c caelestia ipc call {args}", timeout)
+
+
+def polkit_test_rule(vm):
+    """pkexec needs an authentication agent, which nobody answers here: let tester through."""
+    rule = ("// Only in the test VM: no agent to ask in the test session.\n"
+            "polkit.addRule(function(action, subject) {\n"
+            "    if ((action.id == \"org.nexusos.update\" || action.id == \"org.nexusos.rollback\")\n"
+            "            && subject.user == \"tester\")\n"
+            "        return polkit.Result.YES;\n"
+            "});\n")
+    vm.run(f"echo {base64.b64encode(rule.encode()).decode()} | base64 -d > /etc/polkit-1/rules.d/00-nexusos-test.rules")
+
+
+def wait_source(vm, channel, timeout=30):
+    """Whether the source line of update.conf ends with the channel before the timeout (the shell acts asynchronously)."""
+    _, out = vm.run(f"for i in $(seq {timeout}); do grep -q '^source.*/{channel}$' /etc/nexusos/update.conf && break; sleep 1; done;"
+                    " grep '^source' /etc/nexusos/update.conf", timeout + 30)
+    return out.endswith(f"/{channel}"), out
 
 
 def snapshot_list(vm):
@@ -287,6 +316,27 @@ try:
             check("nexus-shell replaces caelestia-shell", status == 0, out)
         desktop(vm, f"updated-{firmware}")
 
+        if installed_since(vm, "nexus-shell", "0.3.0"):
+            # The Updates page of the shell, driven by IPC. Its effects are checked
+            # in the system, not in what the calls print, whose format is the shell's.
+            polkit_test_rule(vm)
+            _, pre_n = run(f"snapper --csvout -c root list --columns number,type,description"
+                           f" | sed -n 's|^\\([0-9]*\\),pre,nexusos-update {target}$|\\1|p'")
+            found, out = False, ""
+            for _ in range(15):
+                _, out = shell_ipc(vm, "updates snapshots")
+                found = bool(pre_n) and re.search(rf"(?<!\d){pre_n}(?!\d)", out) is not None
+                if found:
+                    break
+                time.sleep(2)
+            check(f"desktop shell lists snapshot {pre_n or '?'}, the pre of the update", found, out.replace("\n", " | "))
+            shell_ipc(vm, "updates setChannel testing")
+            ok, out = wait_source(vm, "testing")
+            check("desktop shell moves the source to testing", ok, out)
+            shell_ipc(vm, "updates setChannel stable")
+            ok, out = wait_source(vm, "stable")
+            check("desktop shell puts the source back to stable", ok, out)
+
         status, _ = run("lsinitcpio /boot/initramfs-linux.img | grep -q 'hooks/nexusos-snapshot$'")
         check("initramfs carries the nexusos-snapshot hook", status == 0)
         if entries != 0:
@@ -331,8 +381,24 @@ try:
                 vm.send("systemctl reboot\n")
                 vm.login(password)
                 started(vm)
-                status, out = run(f"nexusos-rollback {pre} --yes", 300)
-                check(f"nexusos-rollback to snapshot {pre}", status == 0, out.split("\n")[-1])
+                if installed_since(vm, "nexus-shell", "0.3.0"):
+                    # Through the Updates page of the shell, as the user. The test rule
+                    # sits on @, which the snapshot boots did not change.
+                    status, _ = run("test -f /etc/polkit-1/rules.d/00-nexusos-test.rules")
+                    check("polkit test rule still there on the updated system", status == 0)
+                    if status != 0:
+                        polkit_test_rule(vm)
+                    desktop(vm, f"before-rollback-{firmware}")
+                    _, out = shell_ipc(vm, f"updates rollback {pre}")
+                    # The old root appears while the rollback runs: wait for it to end too.
+                    status, _ = run("for i in $(seq 300); do btrfs subvolume list / | grep -q ' path @\\.old-[^/]*$'"
+                                    " && ! pgrep -f 'nexusos-rollbac[k] ' >/dev/null && break; sleep 1; done;"
+                                    " btrfs subvolume list / | grep -q ' path @\\.old-[^/]*$'", 330)
+                    how = " through the desktop shell"
+                else:
+                    status, out = run(f"nexusos-rollback {pre} --yes", 300)
+                    how = ""
+                check(f"nexusos-rollback to snapshot {pre}{how}", status == 0, out.split("\n")[-1])
                 print(out, flush=True)
                 vm.send("systemctl reboot\n")
                 vm.login(password)
