@@ -122,9 +122,11 @@ def base_since(vm, version):
 
 
 def shell_ipc(vm, args, timeout=60):
-    """An IPC call to the desktop shell, from the root console, as the user whose session runs it."""
+    """An IPC call to the desktop shell, from the root console, as the user whose session runs it.
+
+    The console has no display, so the instance is not filtered by one (--any-display)."""
     return vm.run("runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/$(id -u tester)"
-                  f" timeout {timeout - 5} qs -c caelestia ipc call {args}", timeout)
+                  f" timeout {timeout - 5} qs -c caelestia ipc --any-display call {args}", timeout)
 
 
 def polkit_test_rule(vm):
