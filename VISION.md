@@ -123,17 +123,25 @@ Only where it pays off:
 An OS-level vault for passwords, TOTP codes, SSH and GPG keys, offered at
 install time and optional:
 
-- **System package, not part of Nexus:** the Secret Service D-Bus API from
-  KeePassXC (TOTP included) or gnome-keyring, unlocked at login through PAM
-  and greetd; FIDO2 keys (pam-u2f) and fprintd as options.
+- **System package, not part of Nexus:** the Secret Service D-Bus API over
+  a KDBX vault (TOTP included), unlocked at login through PAM and greetd;
+  FIDO2 keys (pam-u2f) and fprintd as options. Without the vault,
+  gnome-keyring stays the Secret Service.
 - **Nexus never reads the vault directly** (prompt injection): a broker, in
   Rust, grants access per entry and per request after a confirmation the
   system shows (once / always / deny). Where possible Nexus never sees the
   value: the broker fills the field or injects the token. Every access is
   logged and revocable. Never allowed: export, reading TOTP codes, changing
   the master password.
-- **Order:** the standard vault alone first (archinstall profile, PAM in
-  greetd); the broker once Nexus is in the OS.
+- **Order:** KeePassXC first, as the Secret Service and the browser
+  autofill, behind an install-time question; it asks its master password
+  once per session. Then our own Rust daemon replaces it module by module,
+  on the same KDBX file (a standard format other clients and phones read,
+  handled by a tested library, never our own crypto): Secret Service API,
+  unlock at login through PAM, the KeePassXC-Browser protocol so the same
+  extension keeps working, vault features in nexus-shell (launcher search,
+  typing into apps, clipboard cleared after use, lock on suspend). The
+  broker comes once Nexus is in the OS.
 
 Keeping TOTP codes in the same vault as the passwords weakens two-factor
 authentication; a hardware key stays preferable for critical accounts.
