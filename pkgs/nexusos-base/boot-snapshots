@@ -145,8 +145,9 @@ list() {
     device=$(arg root)
     device=$(findfs "$device" 2>/dev/null) || true
     if [[ -n $subvol && -b $device ]] && top=$(mktemp -d /run/nexusos-snapshots.XXXXXX); then
-      # Also after the cleanup below: the exit status of the trap is the script's.
-      trap "umount '$top' 2>/dev/null; rmdir '$top' 2>/dev/null || true" EXIT
+      # Also after the cleanup below, so nothing in it may fail: set -e holds in
+      # the trap too, and its exit status becomes the script's.
+      trap "{ umount '$top'; rmdir '$top'; } 2>/dev/null || true" EXIT
       mount -o ro,subvol="$subvol/.snapshots" "$device" "$top" 2>/dev/null && snapshots=$top || true
     fi
   fi
