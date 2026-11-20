@@ -436,6 +436,11 @@ try:
                                     " btrfs subvolume list / | grep -c ' path @\\.old-[^/]*$'")
                 check(f"rolled back: root subvolume @, snapshot {before}, snapshots kept, old root kept",
                       state.split("\n") == ["btrfs", "subvol=/@", before, "2", "1"], state.replace("\n", " | "))
+                if base_since(vm, "0.8.0"):
+                    status, out = run("nexusos-rollback --clean --yes", 120)
+                    _, left = run("btrfs subvolume list / | grep -c ' path @\\.old-'")
+                    check("nexusos-rollback --clean deletes the old root",
+                          status == 0 and left.strip() == "0", f"{out} | left: {left}")
                 status, out = run("nexusos-update --check", 120)
                 check("nexusos-update offers the update again", status == 0, out)
                 desktop(vm, f"rollback-{firmware}")

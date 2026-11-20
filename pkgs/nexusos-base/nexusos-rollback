@@ -10,25 +10,33 @@
 # running system or from the snapshot booted read-only from the boot menu,
 # where it defaults to that snapshot.
 #
+# Only one old root is kept: a rollback deletes the older ones. --clean deletes
+# the old roots that are left, once the system has been checked after a reboot.
+# One that a mount still uses (the root that just ran, before a reboot) stays.
+#
 # Usage: nexusos-rollback [NUMBER] [--yes]
+#        nexusos-rollback --clean [--yes]
 set -euo pipefail
 
 die() { echo "nexusos-rollback: $*" >&2; exit 1; }
 
-n= yes=0
+usage="usage: nexusos-rollback [NUMBER] [--yes] | nexusos-rollback --clean [--yes]"
+n= yes=0 clean=0
 for arg; do
   case $arg in
     --yes) yes=1 ;;
-    [0-9]*) [[ $arg =~ ^[0-9]+$ && -z $n ]] || die "usage: nexusos-rollback [NUMBER] [--yes]"; n=$arg ;;
-    *) die "usage: nexusos-rollback [NUMBER] [--yes]" ;;
+    --clean) clean=1 ;;
+    [0-9]*) [[ $arg =~ ^[0-9]+$ && -z $n ]] || die "$usage"; n=$arg ;;
+    *) die "$usage" ;;
   esac
 done
+(( !clean )) || [[ -z $n ]] || die "$usage"
 
 (( EUID == 0 )) || die "run as root"
 cmdline=$(< /proc/cmdline)
 arg() { tr ' ' '\n' <<<"$cmdline" | sed -n "s/^$1=//p" | tail -n1; }
-[[ -n $n ]] || n=$(arg nexusos.snapshot)
-[[ -n $n ]] || die "which snapshot? nexusos-rollback NUMBER (snapper list)"
+(( clean )) || [[ -n $n ]] || n=$(arg nexusos.snapshot)
+(( clean )) || [[ -n $n ]] || die "which snapshot? nexusos-rollback NUMBER (snapper list)"
 [[ ! -e /var/lib/pacman/db.lck ]] || die "pacman is running"
 exec 9>/run/nexusos-update.lock
 flock -n 9 || die "an update is running"
@@ -45,6 +53,44 @@ device=$(findfs "$root" 2>/dev/null) || device=$root
 top=$(mktemp -d /run/nexusos-rollback.XXXXXX)
 trap 'umount "$top" 2>/dev/null; rmdir "$top"' EXIT
 mount -o subvolid=5 "$device" "$top"
+
+# Old roots ($subvol.old-*, older than $1 when given) that no mount uses: the
+# names to delete in gone, the ones a mount still uses (kept) are said.
+gone=()
+find_old() {
+  local used d name id
+  used=$(findmnt -rn -t btrfs -o OPTIONS | grep -o 'subvolid=[0-9]*' | cut -d= -f2) || true
+  gone=()
+  for d in "$top/$subvol".old-*; do
+    name=${d##*/}
+    [[ -e $d && ( -z ${1-} || $name < $1 ) ]] || continue
+    id=$(btrfs subvolume show "$d" 2>/dev/null | sed -n 's/^[[:space:]]*Subvolume ID:[[:space:]]*//p') || true
+    [[ -n $id ]] || continue
+    if grep -qx "$id" <<<"$used"; then
+      echo "Kept $name: in use until the next boot."
+    else
+      gone+=("$name")
+    fi
+  done
+}
+delete_old() {
+  local name
+  for name in "${gone[@]}"; do btrfs subvolume delete --recursive "$top/$name" >/dev/null; done
+}
+
+if (( clean )); then
+  find_old
+  (( ${#gone[@]} )) || { echo "No old system to delete."; exit 0; }
+  echo "To delete for good: ${gone[*]}"
+  if (( !yes )); then
+    read -rp "Go on? [y/N] " answer
+    [[ $answer == [yY]* ]] || exit 1
+  fi
+  delete_old
+  sync
+  exit 0
+fi
+
 snapshots=$top/$subvol/.snapshots
 snap=$snapshots/$n/snapshot
 [[ -f $snapshots/$n/info.xml ]] && btrfs subvolume show "$snap" >/dev/null 2>&1 || die "no snapshot $n of /"
@@ -75,6 +121,8 @@ fi
 old=$subvol.old-$(date +%Y%m%d-%H%M%S)
 echo "Snapshot $n ($(field date) UTC, $(field description)) becomes the system from the next boot."
 echo "The system as it is now stays in the subvolume $old."
+find_old "$old"
+(( ${#gone[@]} == 0 )) || echo "Only one old system is kept: ${gone[*]} will be deleted for good."
 (( ${#restore[@]} == 0 )) || echo "Back on /boot: ${restore[*]##*/}"
 if (( !yes )); then
   read -rp "Go on? [y/N] " answer
@@ -99,8 +147,8 @@ for f in "${restore[@]}"; do
   cp "/boot/nexusos/$f" "/boot/${f#*/}.new"
   mv "/boot/${f#*/}.new" "/boot/${f#*/}"
 done
+delete_old
 sync
 # Subvolumes created beneath the root (systemd makes /var/lib/machines one) stay
 # with the old system: deleting it takes them too.
-echo "Done: reboot to start snapshot $n. Once it runs well, delete the old system:"
-echo "  mount -o subvolid=5 $device /mnt && btrfs subvolume delete --recursive /mnt/$old && umount /mnt"
+echo "Done: reboot to start snapshot $n. Once it runs well, run nexusos-rollback --clean to delete the old system."
