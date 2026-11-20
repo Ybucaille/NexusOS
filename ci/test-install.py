@@ -332,6 +332,11 @@ try:
               status == 0 and f"/repos/{target}/" in state and f"snapshot={target}" in state
               and "SigLevel = Required" in state, state.replace("\n", " | "))
         repositories(vm)
+        if not has_secrets:
+            # nexusos-desktop no longer depends on it: an update must not take
+            # the Secret Service away.
+            status, pkgs = run("pacman -Qq gnome-keyring && ! pacman -Qq nexusos-secrets 2>/dev/null")
+            check("gnome-keyring kept by the update", status == 0, pkgs.replace("\n", " "))
         status, out = run("nexusos-update --check", 120)
         check("nexusos-update finds nothing newer", status == 2, out)
         # As the desktop shell asks, without root.
