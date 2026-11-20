@@ -54,6 +54,27 @@ Guarantees:
 - Supervision is event-driven and cheap: deterministic triage or a small model
   first, the large model only when there is something to analyze.
 
+The catalog bounds Nexus's autonomy, not its capability:
+
+- **System scope only.** The catalog covers privileged actions that touch
+  system health. User space (projects, files, dotfiles, desktop theming,
+  sandboxed experiments) stays under Nexus's own permission levels: observe,
+  reflect, propose, test (sandbox), modify.
+- **Primitives, not use cases.** Each action is a parameterized primitive with
+  an allowed range (restart a unit, set an allowed sysctl key within bounds,
+  weight a cgroup slice, stage/apply/roll back an update), never a feature
+  such as "fix the Wi-Fi". Useful behavior comes from composing them.
+- **Grows by proposal.** When Nexus keeps needing an action the catalog lacks,
+  it can propose one: write its specification, test it in a sandbox, measure
+  it before and after; the owner decides whether a later NexusOS release adds
+  it. Nexus never grants itself a new action.
+- **Outside the catalog, attended only.** A privileged action the catalog does
+  not cover remains possible with explicit owner approval each time and a
+  snapshot taken first. Owner-set auto rules apply to catalog families only.
+
+The capability interface is specified together with Nexus's executor, so both
+share the same action types.
+
 Until Nexus has an executor, NexusOS builds the reflex and rule tiers (which
 make the OS solid on their own) and specifies the interface.
 
